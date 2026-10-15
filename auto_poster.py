@@ -13,8 +13,8 @@ PROMPT = """Ты — редактор русскоязычного Telegram-ка
 Тема поста: "{topic}"
 {guidance}
 
-Используй поиск Google, найди свежую достоверную информацию по теме и напиши пост НА РУССКОМ ЯЗЫКЕ.
-Верни ответ СТРОГО в этом формате, без лишнего текста и без оберток вроде markdown-блоков:
+Напиши экспертный, актуальный пост для Telegram НА РУССКОМ ЯЗЫКЕ.
+Верни ответ СТРОГО в этом формате, без лишнего текста:
 
 ===TITLE===
 Цепляющий заголовок до 80 символов (на русском)
@@ -49,12 +49,11 @@ def pick_topic(topics):
 
 def generate(topic, guidance):
     guidance_block = f"Дополнительные требования: {guidance}" if guidance else ""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+    # Используем актуальный эндпоинт gemini-2.5-flash
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
     
     payload = {
-        "contents": [{"parts": [{"text": PROMPT.format(topic=topic, guidance=guidance_block)}]}],
-        "tools": [{"googleSearch": {}}],
-        "generationConfig": {"temperature": 0.7}
+        "contents": [{"parts": [{"text": PROMPT.format(topic=topic, guidance=guidance_block)}]}]
     }
 
     r = requests.post(url, json=payload, timeout=180)
