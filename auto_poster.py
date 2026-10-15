@@ -54,7 +54,7 @@ def generate(topic, guidance):
         "https://api.perplexity.ai/chat/completions",
         headers={"Authorization": f"Bearer {PPLX_KEY}"},
         json={
-            "model": "sonar",
+            "model": "sonar-pro",
             "messages": [{"role": "user",
                           "content": PROMPT.format(topic=topic, guidance=guidance_block)}],
         },
