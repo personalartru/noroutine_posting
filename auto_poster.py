@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 BOT_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
 CHANNEL_ID  = os.environ["TELEGRAM_CHANNEL_ID"]
-PPLX_KEY    = os.environ["PERPLEXITY_API_KEY"]
+GEMINI_KEY  = os.environ["GEMINI_API_KEY"]
 TOPICS_FILE = "topics.json"
 
 PROMPT = """Ты — редактор русскоязычного Telegram-канала про автоматизацию рабочих процессов и AI.
@@ -13,8 +13,8 @@ PROMPT = """Ты — редактор русскоязычного Telegram-ка
 Тема поста: "{topic}"
 {guidance}
 
-Найди в интернете свежую достоверную информацию по теме и напиши пост НА РУССКОМ ЯЗЫКЕ.
-Верни ответ СТРОГО в этом формате, без пояснений:
+Используй поиск Google, найди свежую достоверную информацию по теме и напиши пост НА РУССКОМ ЯЗЫКЕ.
+Верни ответ СТРОГО в этом формате, без лишнего текста и без оберток вроде markdown-блоков:
 
 ===TITLE===
 Цепляющий заголовок до 80 символов (на русском)
@@ -23,7 +23,6 @@ PROMPT = """Ты — редактор русскоязычного Telegram-ка
 списки через •, конкретика и практические тезисы, без воды.
 ===TAGS===
 4–6 РЕЛЕВАНТНЫХ теме хэштегов через пробел в формате #тег
-(можно на русском или латиницей, например #автоматизация #yandexTracker)
 ===IMAGE===
 Короткий промпт НА АНГЛИЙСКОМ для генератора картинок: абстрактная метафора темы,
 стиль "clean modern tech illustration, minimal, no text"
@@ -50,18 +49,19 @@ def pick_topic(topics):
 
 def generate(topic, guidance):
     guidance_block = f"Дополнительные требования: {guidance}" if guidance else ""
-    r = requests.post(
-        "https://api.perplexity.ai/chat/completions",
-        headers={"Authorization": f"Bearer {PPLX_KEY}"},
-        json={
-            "model": "sonar-pro",
-            "messages": [{"role": "user",
-                          "content": PROMPT.format(topic=topic, guidance=guidance_block)}],
-        },
-        timeout=180,
-    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+    
+    payload = {
+        "contents": [{"parts": [{"text": PROMPT.format(topic=topic, guidance=guidance_block)}]}],
+        "tools": [{"googleSearch": {}}],
+        "generationConfig": {"temperature": 0.7}
+    }
+
+    r = requests.post(url, json=payload, timeout=180)
     r.raise_for_status()
-    text = r.json()["choices"][0]["message"]["content"]
+    
+    data = r.json()
+    text = data["candidates"][0]["content"]["parts"][0]["text"]
 
     def grab(name):
         m = re.search(rf"==={name}===\s*(.*?)(?====|\Z)", text, re.S)
