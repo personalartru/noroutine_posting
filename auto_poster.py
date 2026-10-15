@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 BOT_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
 CHANNEL_ID  = os.environ["TELEGRAM_CHANNEL_ID"]
-GEMINI_KEY  = os.environ["GEMINI_API_KEY"]
+OPENAI_KEY  = os.environ["OPENAI_API_KEY"]
 TOPICS_FILE = "topics.json"
 
 PROMPT = """Ты — редактор русскоязычного Telegram-канала про автоматизацию рабочих процессов и AI.
@@ -13,9 +13,8 @@ PROMPT = """Ты — редактор русскоязычного Telegram-ка
 Тема поста: "{topic}"
 {guidance}
 
-Напиши экспертный, актуальный пост для Telegram НА РУССКОМ ЯЗЫКЕ.
-Верни ответ СТРОГО в этом формате, без лишнего текста:
-
+Используя свои знания, напиши экспертный, актуальный пост для Telegram НА РУССКОМ ЯЗЫКЕ.
+Верни ответ СТРОГО в этом формате, без лишнего текста и без оберток вроде ```markdown:
 ===TITLE===
 Цепляющий заголовок до 80 символов (на русском)
 ===POST===
@@ -49,18 +48,21 @@ def pick_topic(topics):
 
 def generate(topic, guidance):
     guidance_block = f"Дополнительные требования: {guidance}" if guidance else ""
-    # Используем стабильный эндпоинт v1 вместо v1beta с моделью gemini-2.0-flash
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
     
-    payload = {
-        "contents": [{"parts": [{"text": PROMPT.format(topic=topic, guidance=guidance_block)}]}]
-    }
-
-    r = requests.post(url, json=payload, timeout=180)
+    r = requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={"Authorization": f"Bearer {OPENAI_KEY}"},
+        json={
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": PROMPT.format(topic=topic, guidance=guidance_block)}],
+            "temperature": 0.7
+        },
+        timeout=180,
+    )
     r.raise_for_status()
     
     data = r.json()
-    text = data["candidates"][0]["content"]["parts"][0]["text"]
+    text = data["choices"][0]["message"]["content"]
 
     def grab(name):
         m = re.search(rf"==={name}===\s*(.*?)(?====|\Z)", text, re.S)
