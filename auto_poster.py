@@ -1,11 +1,14 @@
 import json, os, re, sys, datetime
 import requests
 from urllib.parse import quote
+import google.generativeai as genai
 
 BOT_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
 CHANNEL_ID  = os.environ["TELEGRAM_CHANNEL_ID"]
 GEMINI_KEY  = os.environ["GEMINI_API_KEY"]
 TOPICS_FILE = "topics.json"
+
+genai.configure(api_key=GEMINI_KEY)
 
 PROMPT = """Ты — редактор русскоязычного Telegram-канала про автоматизацию рабочих процессов и AI.
 Аудитория: IT-команды, digital-агентства, маркетологи, продакты.
@@ -14,7 +17,7 @@ PROMPT = """Ты — редактор русскоязычного Telegram-ка
 {guidance}
 
 Напиши экспертный, актуальный пост для Telegram НА РУССКОМ ЯЗЫКЕ.
-Верни ответ СТРОГО в этом формате, без лишнего текста:
+Верни ответ СТРОГО в этом формате, без лишнего текста и без markdown-окружений вокруг всего ответа:
 
 ===TITLE===
 Цепляющий заголовок до 80 символов (на русском)
@@ -49,17 +52,9 @@ def pick_topic(topics):
 
 def generate(topic, guidance):
     guidance_block = f"Дополнительные требования: {guidance}" if guidance else ""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
-    
-    payload = {
-        "contents": [{"parts": [{"text": PROMPT.format(topic=topic, guidance=guidance_block)}]}]
-    }
-
-    r = requests.post(url, json=payload, timeout=180)
-    r.raise_for_status()
-    
-    data = r.json()
-    text = data["candidates"][0]["content"]["parts"][0]["text"]
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    response = model.generate_content(PROMPT.format(topic=topic, guidance=guidance_block))
+    text = response.text
 
     def grab(name):
         m = re.search(rf"==={name}===\s*(.*?)(?====|\Z)", text, re.S)
