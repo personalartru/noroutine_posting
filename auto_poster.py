@@ -5,11 +5,13 @@ from urllib.parse import quote
 BOT_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
 CHANNEL_ID  = os.environ["TELEGRAM_CHANNEL_ID"]
 OPENAI_KEY  = os.environ["OPENAI_API_KEY"]
-POLLINATIONS_KEY = os.environ.get("POLLINATIONS_API_KEY", "") # Опциональный ключ
+POLLINATIONS_KEY = os.environ.get("POLLINATIONS_API_KEY", "")
 TOPICS_FILE = "topics.json"
 
 PROMPT = """Ты — редактор русскоязычного Telegram-канала про автоматизацию рабочих процессов и AI.
 Аудитория: IT-команды, digital-агентства, маркетологи, продакты.
+
+Текущий год в мире: 2026. Пиши актуально с позиции 2026 года, опирайся на современные технологии и тренды (никаких устаревших данных из 2023 года).
 
 Тема поста: "{topic}"
 {guidance}
@@ -70,12 +72,18 @@ def pick_topic(topics):
 def generate(topic, guidance):
     guidance_block = f"Дополнительные требования: {guidance}" if guidance else ""
     
+    # Экранируем фигурные скобки внутри PROMPT перед .format(), кроме {topic} и {guidance}
+    safe_prompt_template = PROMPT.replace("{", "{{").replace("}", "}}")
+    safe_prompt_template = safe_prompt_template.replace("{{topic}}", "{topic}").replace("{{guidance}}", "{guidance}")
+    
+    formatted_prompt = safe_prompt_template.format(topic=topic, guidance=guidance_block)
+
     r = requests.post(
         "https://api.openai.com/v1/chat/completions",
         headers={"Authorization": f"Bearer {OPENAI_KEY}"},
         json={
             "model": "gpt-4o-mini",
-            "messages": [{"role": "user", "content": PROMPT.format(topic=topic, guidance=guidance_block)}],
+            "messages": [{"role": "user", "content": formatted_prompt}],
             "temperature": 0.7
         },
         timeout=180,
@@ -133,7 +141,6 @@ def main():
     s = generate(item["topic"], item.get("guidance", ""))
     full_text = f"<b>{s['title']}</b>\n\n{s['post']}\n\n{s['tags']}"
 
-    # Пытаемся отправить картинку, если падает — отправляем только текст
     try:
         res_photo = send_photo(s["image"])
         if not res_photo.get("ok"):
