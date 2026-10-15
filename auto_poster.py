@@ -5,6 +5,7 @@ from urllib.parse import quote
 BOT_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
 CHANNEL_ID  = os.environ["TELEGRAM_CHANNEL_ID"]
 OPENAI_KEY  = os.environ["OPENAI_API_KEY"]
+POLLINATIONS_KEY = os.environ.get("POLLINATIONS_API_KEY", "") # Опциональный ключ
 TOPICS_FILE = "topics.json"
 
 PROMPT = """Ты — редактор русскоязычного Telegram-канала про автоматизацию рабочих процессов и AI.
@@ -79,7 +80,11 @@ def generate(topic, guidance):
 def send_photo(prompt):
     url = (f"https://image.pollinations.ai/prompt/{quote(prompt)}"
            f"?width=1280&height=720&nologo=true&model=flux")
-    img = requests.get(url, timeout=180)
+    headers = {}
+    if POLLINATIONS_KEY:
+        headers["Authorization"] = f"Bearer {POLLINATIONS_KEY}"
+        
+    img = requests.get(url, headers=headers, timeout=180)
     img.raise_for_status()
     return requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
@@ -108,7 +113,14 @@ def main():
     s = generate(item["topic"], item.get("guidance", ""))
     full_text = f"<b>{s['title']}</b>\n\n{s['post']}\n\n{s['tags']}"
 
-    send_photo(s["image"])
+    # Пытаемся отправить картинку, если падает — отправляем только текст
+    try:
+        res_photo = send_photo(s["image"])
+        if not res_photo.get("ok"):
+            print("Предупреждение: не удалось отправить фото, шлем только текст:", res_photo)
+    except Exception as e:
+        print(f"Предупреждение: ошибка генерации/отправки фото ({e}), шлем только текст.")
+
     res = send_message(full_text)
 
     if res.get("ok"):
@@ -117,7 +129,7 @@ def main():
         save_topics(topics)
         print("Опубликовано:", s["title"])
     else:
-        print("Ошибка публикации:", res)
+        print("Ошибка публикации текста:", res)
         sys.exit(1)
 
 
