@@ -52,7 +52,7 @@ def pick_topic(topics):
 
 def generate(topic, guidance):
     guidance_block = f"Дополнительные требования: {guidance}" if guidance else ""
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-pro')
     response = model.generate_content(PROMPT.format(topic=topic, guidance=guidance_block))
     text = response.text
 
