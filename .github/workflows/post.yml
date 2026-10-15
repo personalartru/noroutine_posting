@@ -1,0 +1,32 @@
+name: Auto Post to Telegram
+
+on:
+  schedule:
+    - cron: "0 7 * * *"   # 10:00 МСК (UTC+3), ежедневно
+  workflow_dispatch: {}    # ручной запуск для теста
+
+permissions:
+  contents: write          # чтобы коммитить обновлённый topics.json
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Publish post
+        env:
+          TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          PERPLEXITY_API_KEY:  ${{ secrets.PERPLEXITY_API_KEY }}
+        run: python auto_poster.py
+      - name: Mark topic published
+        run: |
+          git config user.name  "auto-poster"
+          git config user.email "bot@users.noreply.github.com"
+          git add topics.json
+          git commit -m "chore: mark topic published [skip ci]" || echo "no changes"
+          git push
