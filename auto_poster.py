@@ -49,8 +49,7 @@ def pick_topic(topics):
 
 def generate(topic, guidance):
     guidance_block = f"Дополнительные требования: {guidance}" if guidance else ""
-    # Используем актуальный эндпоинт gemini-2.5-flash
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
     
     payload = {
         "contents": [{"parts": [{"text": PROMPT.format(topic=topic, guidance=guidance_block)}]}]
