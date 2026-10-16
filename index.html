@@ -115,10 +115,29 @@
 
                 <div>
                     <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Описание / Задание для ИИ (Guidance)</label>
-                    <textarea id="topic-guidance" rows="3" placeholder="Что конкретно описать, какие акценты расставить..." class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    <textarea id="topic-guidance" rows="3" placeholder="Что описать, акценты..." class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Текст ссылки (например: Подробнее)</label>
+                        <input type="text" id="topic-link-text" placeholder="Подробнее в Дзен" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 uppercase mb-1">URL ссылки</label>
+                        <input type="url" id="topic-link-url" placeholder="https://dzen.ru/..." class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Теги (выберите или добавьте через пробел/#)</label>
+                    <div class="flex flex-wrap gap-2 mb-2" id="tags-selector">
+                        <!-- Чипсы тегов будут здесь -->
+                    </div>
+                    <input type="text" id="topic-tags" placeholder="#автоматизация #AI #новости" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
                     <div>
                         <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Просмотры</label>
                         <input type="number" id="topic-views" value="0" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -152,7 +171,6 @@
                 <div>
                     <label class="block text-xs font-medium text-gray-600 uppercase mb-1">GitHub Personal Access Token</label>
                     <input type="password" id="settings-token" placeholder="ghp_xxxxxxxxxxxx" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
-                    <p class="text-xs text-gray-500 mt-1">Токен сохраняется только в браузере (localStorage).</p>
                 </div>
                 <div class="flex justify-end space-x-3 pt-4">
                     <button onclick="saveSettings()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition shadow-sm">Сохранить настройки</button>
@@ -164,6 +182,7 @@
     <script>
         let topics = [];
         let fileSha = '';
+        const presetTags = ['#автоматизация', '#AI', '#IT', '#n8n', '#ЯндексТрекер', '#бизнесПроцессы', '#NoCode', '#новости'];
 
         function getSettings() {
             return {
@@ -193,6 +212,32 @@
             } catch (err) {
                 alert(err.message);
             }
+        }
+
+        function renderTagsSelector(selectedTags = '') {
+            const container = document.getElementById('tags-selector');
+            container.innerHTML = '';
+            presetTags.forEach(tag => {
+                const isSelected = selectedTags.includes(tag);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `px-2.5 py-1 text-xs rounded-full font-medium transition ${isSelected ? 'bg-blue-600 text-white' : 'bg-gray-200/70 text-gray-700 hover:bg-gray-300'}`;
+                btn.innerText = tag;
+                btn.onclick = () => toggleTag(tag);
+                container.appendChild(btn);
+            });
+        }
+
+        function toggleTag(tag) {
+            const input = document.getElementById('topic-tags');
+            let tags = input.value.split(/\s+/).filter(Boolean);
+            if (tags.includes(tag)) {
+                tags = tags.filter(t => t !== tag);
+            } else {
+                tags.push(tag);
+            }
+            input.value = tags.join(' ');
+            renderTagsSelector(input.value);
         }
 
         function render() {
@@ -232,6 +277,7 @@
                             </div>
                             <h4 class="font-medium text-gray-900 mt-1">${topic.topic}</h4>
                             <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">${topic.guidance || 'Без описания'}</p>
+                            ${topic.linkUrl ? `<a href="${topic.linkUrl}" target="_blank" class="text-xs text-blue-600 hover:underline mt-1 inline-block">🔗 ${topic.linkText || 'Подробнее'}</a>` : ''}
                         </div>
                     </div>
                     <div class="flex items-center space-x-6">
@@ -261,7 +307,7 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    message: 'chore: update topics via macos admin panel',
+                    message: 'chore: update topics and tags via macos admin panel',
                     content: contentEncoded,
                     sha: fileSha
                 })
@@ -286,13 +332,18 @@
                 document.getElementById('topic-status').value = t.status || 'pending';
                 document.getElementById('topic-name').value = t.topic || '';
                 document.getElementById('topic-guidance').value = t.guidance || '';
+                document.getElementById('topic-link-text').value = t.linkText || '';
+                document.getElementById('topic-link-url').value = t.linkUrl || '';
+                document.getElementById('topic-tags').value = t.tags || '';
                 document.getElementById('topic-views').value = t.views || 0;
                 document.getElementById('topic-likes').value = t.likes || 0;
+                renderTagsSelector(t.tags || '');
             } else {
                 document.getElementById('modal-title').innerText = 'Новая тема поста';
                 document.getElementById('topic-form').reset();
                 document.getElementById('topic-index').value = '';
                 document.getElementById('topic-date').value = new Date().toISOString().split('T')[0];
+                renderTagsSelector('');
             }
         }
 
@@ -323,6 +374,9 @@
                 status: document.getElementById('topic-status').value,
                 topic: document.getElementById('topic-name').value,
                 guidance: document.getElementById('topic-guidance').value,
+                linkText: document.getElementById('topic-link-text').value,
+                linkUrl: document.getElementById('topic-link-url').value,
+                tags: document.getElementById('topic-tags').value,
                 views: parseInt(document.getElementById('topic-views').value) || 0,
                 likes: parseInt(document.getElementById('topic-likes').value) || 0
             };
