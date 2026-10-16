@@ -69,6 +69,29 @@
             </div>
         </div>
 
+        <!-- Filters Bar -->
+        <div class="macos-card p-4 rounded-2xl mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center space-x-2">
+                <span class="text-xs font-medium text-gray-500 uppercase">Статус:</span>
+                <select id="filter-status" onchange="render()" class="px-3 py-1.5 bg-white/80 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="all">Все статусы</option>
+                    <option value="pending">Очередь</option>
+                    <option value="published">Опубликовано</option>
+                </select>
+            </div>
+            <div class="flex items-center space-x-3">
+                <div class="flex items-center space-x-1.5">
+                    <span class="text-xs font-medium text-gray-500 uppercase">С:</span>
+                    <input type="date" id="filter-date-from" onchange="render()" class="px-3 py-1.5 bg-white/80 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="flex items-center space-x-1.5">
+                    <span class="text-xs font-medium text-gray-500 uppercase">По:</span>
+                    <input type="date" id="filter-date-to" onchange="render()" class="px-3 py-1.5 bg-white/80 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button onclick="resetFilters()" class="px-3 py-1.5 bg-gray-200/70 hover:bg-gray-300 text-gray-700 rounded-xl text-sm font-medium transition">Сбросить</button>
+            </div>
+        </div>
+
         <!-- Topics List -->
         <div class="bg-white/70 backdrop-blur-xl rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
@@ -131,9 +154,7 @@
 
                 <div>
                     <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Теги (выберите или добавьте через пробел/#)</label>
-                    <div class="flex flex-wrap gap-2 mb-2" id="tags-selector">
-                        <!-- Чипсы тегов будут здесь -->
-                    </div>
+                    <div class="flex flex-wrap gap-2 mb-2" id="tags-selector"></div>
                     <input type="text" id="topic-tags" placeholder="#автоматизация #AI #новости" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
 
@@ -240,9 +261,27 @@
             renderTagsSelector(input.value);
         }
 
+        function resetFilters() {
+            document.getElementById('filter-status').value = 'all';
+            document.getElementById('filter-date-from').value = '';
+            document.getElementById('filter-date-to').value = '';
+            render();
+        }
+
         function render() {
             const container = document.getElementById('topics-container');
             container.innerHTML = '';
+
+            const statusFilter = document.getElementById('filter-status').value;
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+
+            let filtered = topics.filter(topic => {
+                if (statusFilter !== 'all' && topic.status !== statusFilter) return false;
+                if (dateFrom && topic.date < dateFrom) return false;
+                if (dateTo && topic.date > dateTo) return false;
+                return true;
+            });
 
             let total = topics.length;
             let published = topics.filter(t => t.status === 'published').length;
@@ -254,12 +293,14 @@
             document.getElementById('stat-pending').innerText = pending;
             document.getElementById('stat-views').innerText = totalViews;
 
-            if (topics.length === 0) {
-                container.innerHTML = '<div class="p-8 text-center text-gray-400">Список тем пуст</div>';
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="p-8 text-center text-gray-400">Нет материалов, удовлетворяющих условиям фильтра</div>';
                 return;
             }
 
-            topics.forEach((topic, index) => {
+            filtered.forEach((topic) => {
+                // Ищем реальный индекс в исходном массиве для редактирования/удаления
+                const index = topics.indexOf(topic);
                 const isPublished = topic.status === 'published';
                 const el = document.createElement('div');
                 el.className = 'px-6 py-4 flex items-center justify-between hover:bg-gray-50/60 transition';
@@ -307,7 +348,7 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    message: 'chore: update topics and tags via macos admin panel',
+                    message: 'chore: update topics and filters via macos admin panel',
                     content: contentEncoded,
                     sha: fileSha
                 })
