@@ -5,6 +5,7 @@ from urllib.parse import quote
 BOT_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
 CHANNEL_ID  = os.environ["TELEGRAM_CHANNEL_ID"]
 OPENAI_KEY  = os.environ["OPENAI_API_KEY"]
+POLLINATIONS_KEY = os.environ.get("POLLINATIONS_API_KEY", "")
 TOPICS_FILE = "topics.json"
 
 PROMPT = """Ты — редактор русскоязычного Telegram-канала про автоматизацию рабочих процессов и AI.
@@ -30,7 +31,7 @@ PROMPT = """Ты — редактор русскоязычного Telegram-ка
 ===TAGS===
 #тег1 #тег2 #тег3 #тег4
 ===IMAGE===
-Подробный промпт НА АНГЛИЙСКОМ для DALL-E 3: современная минималистичная технологическая иллюстрация для IT-поста, яркие цвета, без текста, векторный или 3D стиль.
+Detailed prompt for image generator in English: Professional futuristic dark mode UI dashboard concept for IT task management and AI automation, glowing neon blue and purple accents, infinity loop motif connecting AI and No-Code icons, clean modern tech vector style, high-end digital interface design, minimalist, 8k resolution, photorealistic rendering.
 """
 
 
@@ -83,34 +84,24 @@ def generate(topic, guidance):
         "title": grab("TITLE"),
         "post":  grab("POST"),
         "tags":  grab("TAGS"),
-        "image": grab("IMAGE") or "Clean modern tech illustration, minimal, no text",
+        "image": grab("IMAGE") or "Professional futuristic dark mode UI dashboard concept for IT task management and AI automation, glowing neon accents, clean tech vector style",
     }
 
 
 def send_photo(prompt):
-    # Генерация картинки через OpenAI DALL-E 3
-    r = requests.post(
-        "https://api.openai.com/v1/images/generations",
-        headers={"Authorization": f"Bearer {OPENAI_KEY}"},
-        json={
-            "model": "dall-e-3",
-            "prompt": prompt,
-            "n": 1,
-            "size": "1024x1024"
-        },
-        timeout=120,
-    )
-    r.raise_for_status()
-    image_url = r.json()["data"][0]["url"]
-
-    # Скачиваем полученную картинку
-    img = requests.get(image_url, timeout=120)
+    # Возвращаем надежный Pollinations.ai с моделью flux и продвинутым промптом
+    url = (f"https://image.pollinations.ai/prompt/{quote(prompt)}"
+           f"?width=1280&height=720&nologo=true&model=flux")
+    headers = {}
+    if POLLINATIONS_KEY:
+        headers["Authorization"] = f"Bearer {POLLINATIONS_KEY}"
+        
+    img = requests.get(url, headers=headers, timeout=180)
     img.raise_for_status()
-
     return requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
         data={"chat_id": CHANNEL_ID},
-        files={"photo": ("cover.png", img.content)},
+        files={"photo": ("cover.jpg", img.content)},
         timeout=120,
     ).json()
 
@@ -139,7 +130,7 @@ def main():
         if not res_photo.get("ok"):
             print("Предупреждение: не удалось отправить фото, шлем только текст:", res_photo)
     except Exception as e:
-        print(f"Предупреждение: ошибка генерации/отправки фото через DALL-E ({e}), шлем только текст.")
+        print(f"Предупреждение: ошибка генерации/отправки фото ({e}), шлем только текст.")
 
     res = send_message(full_text)
 
