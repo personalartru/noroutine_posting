@@ -1,11 +1,10 @@
 import json, os, re, sys, datetime
 import requests
-from urllib.parse import quote
+from PIL import Image, ImageDraw, ImageFont
 
 BOT_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
 CHANNEL_ID  = os.environ["TELEGRAM_CHANNEL_ID"]
 OPENAI_KEY  = os.environ["OPENAI_API_KEY"]
-POLLINATIONS_KEY = os.environ.get("POLLINATIONS_API_KEY", "")
 TOPICS_FILE = "topics.json"
 
 PROMPT = """Ты — редактор русскоязычного Telegram-канала про автоматизацию рабочих процессов и AI.
@@ -30,8 +29,6 @@ PROMPT = """Ты — редактор русскоязычного Telegram-ка
 Текст поста с HTML-разметкой (<b>, <i>, <a href="">) и структурой.
 ===TAGS===
 #тег1 #тег2 #тег3 #тег4
-===IMAGE===
-Detailed prompt for image generator in English: Professional futuristic dark mode UI dashboard concept for IT task management and AI automation, glowing neon blue and purple accents, infinity loop motif connecting AI and No-Code icons, clean modern tech vector style, high-end digital interface design, minimalist, 8k resolution, photorealistic rendering.
 """
 
 
@@ -84,26 +81,98 @@ def generate(topic, guidance):
         "title": grab("TITLE"),
         "post":  grab("POST"),
         "tags":  grab("TAGS"),
-        "image": grab("IMAGE") or "Professional futuristic dark mode UI dashboard concept for IT task management and AI automation, glowing neon accents, clean tech vector style",
     }
 
 
-def send_photo(prompt):
-    # Возвращаем надежный Pollinations.ai с моделью flux и продвинутым промптом
-    url = (f"https://image.pollinations.ai/prompt/{quote(prompt)}"
-           f"?width=1280&height=720&nologo=true&model=flux")
-    headers = {}
-    if POLLINATIONS_KEY:
-        headers["Authorization"] = f"Bearer {POLLINATIONS_KEY}"
-        
-    img = requests.get(url, headers=headers, timeout=180)
-    img.raise_for_status()
-    return requests.post(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
-        data={"chat_id": CHANNEL_ID},
-        files={"photo": ("cover.jpg", img.content)},
-        timeout=120,
-    ).json()
+def create_branded_card(title_text):
+    # Создаем холст 1280x720 (16:9) с темно-синим IT-фоном
+    width, height = 1280, 720
+    img = Image.new("RGB", (width, height), color=(11, 15, 25) # Темный премиальный фон
+    )
+    draw = ImageDraw.Draw(img)
+
+    # Рисуем неоновые фоновые элементы / градиентные полосы
+    draw.rectangle([40, 40, width - 40, height - 40], outline=(0, 200, 255), width=2) # Неоновая рамка
+    draw.rectangle([52, 52, width - 52, height - 52], outline=(100, 50, 255), width=1) # Вторая линия
+
+    # Попытка загрузить системный шрифт (или стандартный дефолтный)
+    font_large = None
+    font_small = None
+    font_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "/Library/Fonts/Arial Bold.ttf"
+    ]
+    for path in font_paths:
+        if os.path.exists(path):
+            try:
+                font_large = ImageFont.truetype(path, 54)
+                font_small = ImageFont.truetype(path, 28)
+                break
+            except:
+                pass
+                
+    if not font_large:
+        font_large = ImageFont.load_default()
+        font_small = ImageFont.load_default()
+
+    # Рисуем плашку категории сверху
+    category_text = "🤖 AI & AUTOMATION"
+    draw.text((80, 90), category_text, fill=(0, 200, 255), font=font_small)
+
+    # Функция для переноса строк текста по ширине
+    def wrap_text(text, font, max_width):
+        lines = []
+        words = text.split()
+        current_line = ""
+        for word in words:
+            test_line = current_line + " " + word if current_line else word
+            # В Pillow 10+ используем getlength, в старых bbox
+            try:
+                w = font.getlength(test_line)
+            except:
+                w = font.getbbox(test_line)[2]
+            if w <= max_width:
+                current_line = test_line
+            else:
+                lines.append(current_line)
+                current_line = word
+        if current_line:
+            lines.append(current_line)
+        return lines
+
+    # Формируем заголовок (убираем лишние эмодзи из технической части если нужно, но оставим как есть)
+    clean_title = re.sub(r'^[^\w\s]+\s*', '', title_text) # Опционально чистим первый символ если мешает
+    wrapped_lines = wrap_text(title_text, font_large, max_width=1100)
+
+    # Вычисляем общую высоту текста для центрирования по вертикали
+    line_height = 70
+    total_text_height = len(wrapped_lines) * line_height
+    start_y = (height - total_text_height) // 2 + 20
+
+    # Отрисовка строк заглавия
+    current_y = start_y
+    for line in wrapped_lines:
+        draw.text((80, current_y), line, fill=(255, 255, 255), font=font_large)
+        current_y += line_height
+
+    # Нижний колонтитул
+    draw.text((80, height - 90), "NoRoutine • Автоматизация & AI", fill=(140, 150, 180), font=font_small)
+
+    card_path = "branded_card.jpg"
+    img.save(card_path, quality=95)
+    return card_path
+
+
+def send_photo(card_path):
+    with open(card_path, "rb") as photo:
+        return requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
+            data={"chat_id": CHANNEL_ID},
+            files={"photo": ("cover.jpg", photo)},
+            timeout=120,
+        ).json()
 
 
 def send_message(text):
@@ -126,11 +195,12 @@ def main():
     full_text = f"<b>{s['title']}</b>\n\n{s['post']}\n\n{s['tags']}"
 
     try:
-        res_photo = send_photo(s["image"])
+        card_path = create_branded_card(s['title'])
+        res_photo = send_photo(card_path)
         if not res_photo.get("ok"):
-            print("Предупреждение: не удалось отправить фото, шлем только текст:", res_photo)
+            print("Предупреждение: не удалось отправить карточку, шлем только текст:", res_photo)
     except Exception as e:
-        print(f"Предупреждение: ошибка генерации/отправки фото ({e}), шлем только текст.")
+        print(f"Предупреждение: ошибка создания/отправки карточки Pillow ({e}), шлем только текст.")
 
     res = send_message(full_text)
 
