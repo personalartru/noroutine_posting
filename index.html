@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NoRoutine • Admin Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+        }
+        .macos-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(229, 229, 234, 0.8);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+        .macos-modal {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(30px);
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-12">
+
+    <!-- Header / macOS Toolbar -->
+    <header class="sticky top-0 z-30 macos-card border-b px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="flex space-x-1.5">
+                <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                <div class="w-3 h-3 rounded-full bg-green-400"></div>
+            </div>
+            <h1 class="font-semibold text-lg tracking-tight ml-4">NoRoutine • Telegram Publisher</h1>
+        </div>
+        <div class="flex items-center space-x-3">
+            <button onclick="openSettingsModal()" class="p-2 hover:bg-gray-200/60 rounded-full transition text-gray-600" title="Настройки GitHub">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+            </button>
+            <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-full text-sm font-medium transition shadow-sm flex items-center space-x-1.5">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Новая тема</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto px-6 mt-8">
+        <!-- Stats Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="macos-card p-5 rounded-2xl">
+                <div class="text-gray-500 text-xs font-medium uppercase tracking-wider">Всего постов</div>
+                <div id="stat-total" class="text-2xl font-semibold mt-1">0</div>
+            </div>
+            <div class="macos-card p-5 rounded-2xl">
+                <div class="text-gray-500 text-xs font-medium uppercase tracking-wider">Опубликовано</div>
+                <div id="stat-published" class="text-2xl font-semibold mt-1 text-green-600">0</div>
+            </div>
+            <div class="macos-card p-5 rounded-2xl">
+                <div class="text-gray-500 text-xs font-medium uppercase tracking-wider">В очереди</div>
+                <div id="stat-pending" class="text-2xl font-semibold mt-1 text-blue-600">0</div>
+            </div>
+            <div class="macos-card p-5 rounded-2xl">
+                <div class="text-gray-500 text-xs font-medium uppercase tracking-wider">Суммарно просмотров</div>
+                <div id="stat-views" class="text-2xl font-semibold mt-1 text-purple-600">0</div>
+            </div>
+        </div>
+
+        <!-- Topics List -->
+        <div class="bg-white/70 backdrop-blur-xl rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+                <h2 class="font-semibold text-gray-800">Очередь постов и расписание</h2>
+                <button onclick="loadTopics()" class="text-sm text-blue-600 hover:underline flex items-center space-x-1">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    <span>Обновить</span>
+                </button>
+            </div>
+            <div id="topics-container" class="divide-y divide-gray-100">
+                <div class="p-8 text-center text-gray-400">Загрузка данных из GitHub...</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal: Add/Edit Topic -->
+    <div id="topic-modal" class="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="macos-modal w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 overflow-hidden transform transition-all">
+            <div class="px-6 py-4 border-b border-gray-200/60 flex justify-between items-center">
+                <h3 id="modal-title" class="font-semibold text-lg">Новая тема поста</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="topic-form" onsubmit="saveTopic(event)" class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                <input type="hidden" id="topic-index">
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Дата публикации</label>
+                        <input type="date" id="topic-date" required class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Статус</label>
+                        <select id="topic-status" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="pending">Очередь (Pending)</option>
+                            <option value="published">Опубликовано (Published)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Тема / Заголовок</label>
+                    <input type="text" id="topic-name" required placeholder="Например: Обзор Open Code в digital-агентстве" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Описание / Задание для ИИ (Guidance)</label>
+                    <textarea id="topic-guidance" rows="3" placeholder="Что конкретно описать, какие акценты расставить..." class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Просмотры</label>
+                        <input type="number" id="topic-views" value="0" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Лайки / Реакции</label>
+                        <input type="number" id="topic-likes" value="0" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200/60">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 transition">Отмена</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition shadow-sm">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Settings -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="macos-modal w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200/60 flex justify-between items-center">
+                <h3 class="font-semibold text-lg">Настройки GitHub</h3>
+                <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 uppercase mb-1">Репозиторий</label>
+                    <input type="text" id="settings-repo" value="personalartru/noroutine_posting" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 uppercase mb-1">GitHub Personal Access Token</label>
+                    <input type="password" id="settings-token" placeholder="ghp_xxxxxxxxxxxx" class="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none">
+                    <p class="text-xs text-gray-500 mt-1">Токен сохраняется только в браузере (localStorage).</p>
+                </div>
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button onclick="saveSettings()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition shadow-sm">Сохранить настройки</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let topics = [];
+        let fileSha = '';
+
+        function getSettings() {
+            return {
+                repo: localStorage.getItem('gh_repo') || 'personalartru/noroutine_posting',
+                token: localStorage.getItem('gh_token') || ''
+            };
+        }
+
+        async function loadTopics() {
+            const { repo, token } = getSettings();
+            if (!token) {
+                openSettingsModal();
+                return;
+            }
+
+            try {
+                const res = await fetch(`https://api.github.com/repos/${repo}/contents/topics.json`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('Не удалось загрузить topics.json. Проверьте токен.');
+                
+                const data = await res.json();
+                fileSha = data.sha;
+                const content = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+                topics = content;
+                render();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        function render() {
+            const container = document.getElementById('topics-container');
+            container.innerHTML = '';
+
+            let total = topics.length;
+            let published = topics.filter(t => t.status === 'published').length;
+            let pending = total - published;
+            let totalViews = topics.reduce((acc, t) => acc + (parseInt(t.views) || 0), 0);
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-published').innerText = published;
+            document.getElementById('stat-pending').innerText = pending;
+            document.getElementById('stat-views').innerText = totalViews;
+
+            if (topics.length === 0) {
+                container.innerHTML = '<div class="p-8 text-center text-gray-400">Список тем пуст</div>';
+                return;
+            }
+
+            topics.forEach((topic, index) => {
+                const isPublished = topic.status === 'published';
+                const el = document.createElement('div');
+                el.className = 'px-6 py-4 flex items-center justify-between hover:bg-gray-50/60 transition';
+                el.innerHTML = `
+                    <div class="flex items-start space-x-4 max-w-2xl">
+                        <div class="mt-1">
+                            <span class="inline-block w-2.5 h-2.5 rounded-full ${isPublished ? 'bg-green-500' : 'bg-blue-500'}"></span>
+                        </div>
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs font-semibold text-gray-400">${topic.date}</span>
+                                <span class="px-2 py-0.5 text-xs rounded-full font-medium ${isPublished ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}">
+                                    ${isPublished ? 'Опубликовано' : 'Очередь'}
+                                </span>
+                            </div>
+                            <h4 class="font-medium text-gray-900 mt-1">${topic.topic}</h4>
+                            <p class="text-xs text-gray-500 mt-0.5 line-clamp-1">${topic.guidance || 'Без описания'}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-6">
+                        <div class="text-right text-xs text-gray-500">
+                            <div>👁 ${topic.views || 0}</div>
+                            <div>❤️ ${topic.likes || 0}</div>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <button onclick="editTopic(${index})" class="p-1.5 hover:bg-gray-200 rounded-lg text-gray-600 transition"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                            <button onclick="deleteTopic(${index})" class="p-1.5 hover:bg-red-100 rounded-lg text-red-600 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(el);
+            });
+            lucide.createIcons();
+        }
+
+        async function saveTopicsToGitHub() {
+            const { repo, token } = getSettings();
+            const contentEncoded = btoa(unescape(encodeURIComponent(JSON.stringify(topics, null, 2))));
+
+            const res = await fetch(`https://api.github.com/repos/${repo}/contents/topics.json`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: 'chore: update topics via macos admin panel',
+                    content: contentEncoded,
+                    sha: fileSha
+                })
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.message || 'Ошибка сохранения в GitHub');
+            }
+
+            const data = await res.json();
+            fileSha = data.content.sha;
+        }
+
+        function openModal(index = null) {
+            document.getElementById('topic-modal').classList.remove('hidden');
+            if (index !== null) {
+                document.getElementById('modal-title').innerText = 'Редактировать тему';
+                document.getElementById('topic-index').value = index;
+                const t = topics[index];
+                document.getElementById('topic-date').value = t.date || '';
+                document.getElementById('topic-status').value = t.status || 'pending';
+                document.getElementById('topic-name').value = t.topic || '';
+                document.getElementById('topic-guidance').value = t.guidance || '';
+                document.getElementById('topic-views').value = t.views || 0;
+                document.getElementById('topic-likes').value = t.likes || 0;
+            } else {
+                document.getElementById('modal-title').innerText = 'Новая тема поста';
+                document.getElementById('topic-form').reset();
+                document.getElementById('topic-index').value = '';
+                document.getElementById('topic-date').value = new Date().toISOString().split('T')[0];
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('topic-modal').classList.add('hidden');
+        }
+
+        function editTopic(index) {
+            openModal(index);
+        }
+
+        async function deleteTopic(index) {
+            if (!confirm('Удалить эту тему из расписания?')) return;
+            topics.splice(index, 1);
+            try {
+                await saveTopicsToGitHub();
+                render();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        async function saveTopic(event) {
+            event.preventDefault();
+            const index = document.getElementById('topic-index').value;
+            const item = {
+                date: document.getElementById('topic-date').value,
+                status: document.getElementById('topic-status').value,
+                topic: document.getElementById('topic-name').value,
+                guidance: document.getElementById('topic-guidance').value,
+                views: parseInt(document.getElementById('topic-views').value) || 0,
+                likes: parseInt(document.getElementById('topic-likes').value) || 0
+            };
+
+            if (index === '') {
+                topics.push(item);
+            } else {
+                topics[index] = { ...topics[index], ...item };
+            }
+
+            try {
+                await saveTopicsToGitHub();
+                closeModal();
+                render();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        function openSettingsModal() {
+            document.getElementById('settings-repo').value = localStorage.getItem('gh_repo') || 'personalartru/noroutine_posting';
+            document.getElementById('settings-token').value = localStorage.getItem('gh_token') || '';
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+
+        function saveSettings() {
+            localStorage.setItem('gh_repo', document.getElementById('settings-repo').value);
+            localStorage.setItem('gh_token', document.getElementById('settings-token').value);
+            closeSettingsModal();
+            loadTopics();
+        }
+
+        window.onload = () => {
+            lucide.createIcons();
+            loadTopics();
+        };
+    </script>
+</body>
+</html>
