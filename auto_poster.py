@@ -13,7 +13,8 @@ PROMPT = """Ты — редактор русскоязычного Telegram-ка
 Текущий год в мире: 2026. Пиши актуально с позиции 2026 года, опирайся на современные технологии и тренды.
 
 Тема поста: "{topic}"
-{guidance}
+Дополнительные указания / контекст: {guidance}
+{link_instruction}
 
 Используя свои знания, напиши увлекательный, экспертный пост для Telegram НА РУССКОМ ЯЗЫКЕ в следующем стиле и структуре:
 - Заголовок с ярким эмодзи в начале (например: 🚀 [Заголовок])
@@ -50,13 +51,14 @@ def pick_topic(topics):
     return None
 
 
-def generate(topic, guidance):
-    guidance_block = f"Дополнительные требования: {guidance}" if guidance else ""
+def generate(topic, guidance, link_text, link_url):
+    guidance_block = f"{guidance}" if guidance else ""
+    link_inst = f"Обязательно добавь в конец текста (перед хэштегами) кликабельную ссылку с текстом '{link_text}' на этот URL: {link_url} в формате HTML (<a href='{link_url}'>{link_text}</a>)." if link_url else ""
     
     safe_prompt_template = PROMPT.replace("{", "{{").replace("}", "}}")
-    safe_prompt_template = safe_prompt_template.replace("{{topic}}", "{topic}").replace("{{guidance}}", "{guidance}")
+    safe_prompt_template = safe_prompt_template.replace("{{topic}}", "{topic}").replace("{{guidance}}", "{guidance}").replace("{{link_instruction}}", "{link_instruction}")
     
-    formatted_prompt = safe_prompt_template.format(topic=topic, guidance=guidance_block)
+    formatted_prompt = safe_prompt_template.format(topic=topic, guidance=guidance_block, link_instruction=link_inst)
 
     r = requests.post(
         "https://api.openai.com/v1/chat/completions",
@@ -77,25 +79,27 @@ def generate(topic, guidance):
         m = re.search(rf"==={name}===\s*(.*?)(?====|\Z)", text, re.S)
         return m.group(1).strip() if m else ""
 
+    post_content = grab("POST")
+    
+    # Страховка: если модель забыла вставить ссылку, добавляем её принудительно в конец поста
+    if link_url and link_text and link_url not in post_content:
+        post_content += f"\n\n🔗 <a href=\"{link_url}\">{link_text}</a>"
+
     return {
         "title": grab("TITLE"),
-        "post":  grab("POST"),
+        "post":  post_content,
         "tags":  grab("TAGS"),
     }
 
 
 def create_branded_card(title_text):
-    # Создаем холст 1280x720 (16:9) с темно-синим IT-фоном
     width, height = 1280, 720
-    img = Image.new("RGB", (width, height), color=(11, 15, 25) # Темный премиальный фон
-    )
+    img = Image.new("RGB", (width, height), color=(11, 15, 25))
     draw = ImageDraw.Draw(img)
 
-    # Рисуем неоновые фоновые элементы / градиентные полосы
-    draw.rectangle([40, 40, width - 40, height - 40], outline=(0, 200, 255), width=2) # Неоновая рамка
-    draw.rectangle([52, 52, width - 52, height - 52], outline=(100, 50, 255), width=1) # Вторая линия
+    draw.rectangle([40, 40, width - 40, height - 40], outline=(0, 200, 255), width=2)
+    draw.rectangle([52, 52, width - 52, height - 52], outline=(100, 50, 255), width=1)
 
-    # Попытка загрузить системный шрифт (или стандартный дефолтный)
     font_large = None
     font_small = None
     font_paths = [
@@ -117,18 +121,14 @@ def create_branded_card(title_text):
         font_large = ImageFont.load_default()
         font_small = ImageFont.load_default()
 
-    # Рисуем плашку категории сверху
-    category_text = "🤖 AI & AUTOMATION"
-    draw.text((80, 90), category_text, fill=(0, 200, 255), font=font_small)
+    draw.text((80, 90), "🤖 AI & AUTOMATION", fill=(0, 200, 255), font=font_small)
 
-    # Функция для переноса строк текста по ширине
     def wrap_text(text, font, max_width):
         lines = []
         words = text.split()
         current_line = ""
         for word in words:
             test_line = current_line + " " + word if current_line else word
-            # В Pillow 10+ используем getlength, в старых bbox
             try:
                 w = font.getlength(test_line)
             except:
@@ -142,22 +142,16 @@ def create_branded_card(title_text):
             lines.append(current_line)
         return lines
 
-    # Формируем заголовок (убираем лишние эмодзи из технической части если нужно, но оставим как есть)
-    clean_title = re.sub(r'^[^\w\s]+\s*', '', title_text) # Опционально чистим первый символ если мешает
     wrapped_lines = wrap_text(title_text, font_large, max_width=1100)
-
-    # Вычисляем общую высоту текста для центрирования по вертикали
     line_height = 70
     total_text_height = len(wrapped_lines) * line_height
     start_y = (height - total_text_height) // 2 + 20
 
-    # Отрисовка строк заглавия
     current_y = start_y
     for line in wrapped_lines:
         draw.text((80, current_y), line, fill=(255, 255, 255), font=font_large)
         current_y += line_height
 
-    # Нижний колонтитул
     draw.text((80, height - 90), "NoRoutine • Автоматизация & AI", fill=(140, 150, 180), font=font_small)
 
     card_path = "branded_card.jpg"
@@ -191,8 +185,10 @@ def main():
         print("Нет тем к публикации на сегодня."); return
 
     item = topics[idx]
-    s = generate(item["topic"], item.get("guidance", ""))
-    full_text = f"<b>{s['title']}</b>\n\n{s['post']}\n\n{s['tags']}"
+    s = generate(item["topic"], item.get("guidance", ""), item.get("linkText", ""), item.get("linkUrl", ""))
+    
+    tags = item.get("tags") or s['tags']
+    full_text = f"<b>{s['title']}</b>\n\n{s['post']}\n\n{tags}"
 
     try:
         card_path = create_branded_card(s['title'])
