@@ -62,7 +62,8 @@ def pick_topic(topics):
 
 def generate(topic, guidance, link_text, link_url):
     guidance_block = f"{guidance}" if guidance else ""
-    link_inst = f"Обязательно добавь в конец текста (перед хэштегами) кликабельную ссылку с текстом '{link_text}' на этот URL: {link_url} в формате HTML (<a href='{link_url}'>{link_text}</a>)." if link_url else ""
+    text_link = link_text or "Подробнее"
+    link_inst = f"Обязательно добавь в конец текста (перед хэштегами) кликабельную ссылку с текстом '{text_link}' на этот URL: {link_url} в формате HTML (<a href='{link_url}'>{text_link}</a>)." if link_url else ""
     
     safe_prompt_template = PROMPT.replace("{", "{{").replace("}", "}}")
     safe_prompt_template = safe_prompt_template.replace("{{topic}}", "{topic}").replace("{{guidance}}", "{guidance}").replace("{{link_instruction}}", "{link_instruction}")
@@ -89,9 +90,15 @@ def generate(topic, guidance, link_text, link_url):
         return m.group(1).strip() if m else ""
 
     post_content = grab("POST")
-    
-    if link_url and link_text and link_url not in post_content:
-        post_content += f"\n\n🔗 <a href=\"{link_url}\">{link_text}</a>"
+
+    # Приводим markdown-ссылки модели к HTML, понятному Telegram
+    post_content = re.sub(r'\[([^\]]+)\]\((https?://[^\s)]+)\)', r'<a href="\2">\1</a>', post_content)
+
+    # Ссылку из админки добавляем в конец, если её ещё нет как HTML-анкера.
+    # Достаточно URL; текст ссылки необязателен.
+    if link_url and not re.search(rf'<a\s+href="{re.escape(link_url)}"', post_content):
+        text_link = link_text or "Подробнее"
+        post_content += f'\n\n🔗 <a href="{link_url}">{text_link}</a>'
 
     return {
         "title": grab("TITLE"),
