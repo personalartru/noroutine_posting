@@ -16,12 +16,13 @@ PROMPT = """Ты — редактор русскоязычного Telegram-ка
 Дополнительные указания / контекст: {guidance}
 {link_instruction}
 
-Используя свои знания, напиши увлекательный, без клише и штампов, экспертный пост для Telegram НА РУССКОМ ЯЗЫКЕ в следующем стиле и структуре:
-- Заголовок с ярким эмодзи в начале (например: 🚀 [Заголовок])
-- Краткая проблема (почему это важно/болит)
-- Суть темы / тезисов в виде красивых пунктов с эмодзи (название, суть, польза)
-- Мотивирующий вывод / призыв к действию в конце
-- Хэштеги в самом низу
+Напиши пост НА РУССКОМ ЯЗЫКЕ строго по следующему неформальному сценарию и структуре (без банальных клише и канцелярита):
+- Заголовок с ярким эмодзи в начале (Пример: 🚀 5 трендов автоматизации в IT (октябрь 2026))
+- Проблема: опиши боль в 1-2 предложениях (например, рутина съедает до 30% времени).
+- Задача: сформулируй цель (вернуть время команде на созидание).
+- Суть трендов / пунктов в формате:
+  [Эмодзи] [Название]: [Суть]. Польза: [конкретная польза].
+- Вывод и призыв к действию в конце.
 
 Верни ответ СТРОГО в этом формате, без лишнего текста и без оберток вроде ```markdown:
 ===TITLE===
@@ -81,7 +82,6 @@ def generate(topic, guidance, link_text, link_url):
 
     post_content = grab("POST")
     
-    # Страховка: если модель забыла вставить ссылку, добавляем её принудительно в конец поста
     if link_url and link_text and link_url not in post_content:
         post_content += f"\n\n🔗 <a href=\"{link_url}\">{link_text}</a>"
 
@@ -159,14 +159,24 @@ def create_branded_card(title_text):
     return card_path
 
 
-def send_photo(card_path):
-    with open(card_path, "rb") as photo:
+def send_photo(photo_source):
+    # Проверяем, это URL или локальный файл
+    if photo_source.startswith("http://") or photo_source.startswith("https://"):
+        img_data = requests.get(photo_source, timeout=60).content
         return requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
             data={"chat_id": CHANNEL_ID},
-            files={"photo": ("cover.jpg", photo)},
+            files={"photo": ("cover.jpg", img_data)},
             timeout=120,
         ).json()
+    else:
+        with open(photo_source, "rb") as photo:
+            return requests.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
+                data={"chat_id": CHANNEL_ID},
+                files={"photo": ("cover.jpg", photo)},
+                timeout=120,
+            ).json()
 
 
 def send_message(text):
@@ -191,12 +201,18 @@ def main():
     full_text = f"<b>{s['title']}</b>\n\n{s['post']}\n\n{tags}"
 
     try:
-        card_path = create_branded_card(s['title'])
-        res_photo = send_photo(card_path)
+        # Если в админке указана своя картинка — берем её, иначе генерируем карточку
+        custom_image = item.get("imageUrl")
+        if custom_image:
+            res_photo = send_photo(custom_image)
+        else:
+            card_path = create_branded_card(s['title'])
+            res_photo = send_photo(card_path)
+
         if not res_photo.get("ok"):
-            print("Предупреждение: не удалось отправить карточку, шлем только текст:", res_photo)
+            print("Предупреждение: не удалось отправить фото, шлем только текст:", res_photo)
     except Exception as e:
-        print(f"Предупреждение: ошибка создания/отправки карточки Pillow ({e}), шлем только текст.")
+        print(f"Предупреждение: ошибка отправки фото ({e}), шлем только текст.")
 
     res = send_message(full_text)
 
