@@ -12,13 +12,14 @@ PROMPT = """Ты — редактор русскоязычного Telegram-ка
 
 Текущий год в мире: 2026. Пиши актуально с позиции 2026 года, опирайся на современные технологии и тренды.
 
+Дата публикации: {date}
 Тема поста: "{topic}"
 Дополнительные указания / контекст: {guidance}
 {link_instruction}
 
 Напиши пост НА РУССКОМ ЯЗЫКЕ строго по этому сценарию: неформально, живо, без клише, штампов и канцелярита. Пиши так, как пишет человек, а не пресс-релиз. Строго повтори структуру примера:
 
-ЗАГОЛОВОК (одна строка): [эмодзи] [цепкий заголовок с числом и месяцем/годом, например: 🚀 5 трендов автоматизации в IT (октябрь 2026)]
+ЗАГОЛОВОК (одна строка): [эмодзи] [цепкий заголовок]. Если в заголовке указываешь месяц и год — бери их СТРОГО из «Даты публикации» выше, не придумывай другой месяц. Пример: 🚀 5 трендов автоматизации в IT (октябрь 2026)
 
 Проблема: 1-2 предложения о реальной боли (например: рутина съедает до 30% времени. Вместо фич мы сводим отчёты и отвечаем на одни и те же вопросы).
 
@@ -68,15 +69,32 @@ def already_published_today(topics):
     return False
 
 
-def generate(topic, guidance, link_text, link_url):
+MONTHS_RU = ["января", "февраля", "марта", "апреля", "мая", "июня",
+             "июля", "августа", "сентября", "октября", "ноября", "декабря"]
+
+
+def format_date_ru(date_str):
+    try:
+        d = datetime.date.fromisoformat(str(date_str))
+        return f"{d.day} {MONTHS_RU[d.month - 1]} {d.year}"
+    except (ValueError, TypeError):
+        return str(date_str or "не указана")
+
+
+def generate(topic, guidance, link_text, link_url, date_str=""):
     guidance_block = f"{guidance}" if guidance else ""
     text_link = link_text or "Подробнее"
     link_inst = f"Обязательно добавь в конец текста (перед хэштегами) кликабельную ссылку с текстом '{text_link}' на этот URL: {link_url} в формате HTML (<a href='{link_url}'>{text_link}</a>)." if link_url else ""
-    
+    date_block = format_date_ru(date_str)
+
     safe_prompt_template = PROMPT.replace("{", "{{").replace("}", "}}")
-    safe_prompt_template = safe_prompt_template.replace("{{topic}}", "{topic}").replace("{{guidance}}", "{guidance}").replace("{{link_instruction}}", "{link_instruction}")
-    
-    formatted_prompt = safe_prompt_template.format(topic=topic, guidance=guidance_block, link_instruction=link_inst)
+    safe_prompt_template = (safe_prompt_template
+                            .replace("{{topic}}", "{topic}")
+                            .replace("{{guidance}}", "{guidance}")
+                            .replace("{{link_instruction}}", "{link_instruction}")
+                            .replace("{{date}}", "{date}"))
+
+    formatted_prompt = safe_prompt_template.format(topic=topic, guidance=guidance_block, link_instruction=link_inst, date=date_block)
 
     r = requests.post(
         "https://api.openai.com/v1/chat/completions",
@@ -225,7 +243,7 @@ def main():
         print("Нет тем к публикации на сегодня."); return
 
     item = topics[idx]
-    s = generate(item["topic"], item.get("guidance", ""), item.get("linkText", ""), item.get("linkUrl", ""))
+    s = generate(item["topic"], item.get("guidance", ""), item.get("linkText", ""), item.get("linkUrl", ""), item.get("date", ""))
     
     tags = item.get("tags") or s['tags']
     full_text = f"<b>{s['title']}</b>\n\n{s['post']}\n\n{tags}"
