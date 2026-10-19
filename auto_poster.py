@@ -60,6 +60,14 @@ def pick_topic(topics):
     return None
 
 
+def already_published_today(topics):
+    today = datetime.datetime.utcnow().date().isoformat()
+    for t in topics:
+        if t.get("status") == "published" and str(t.get("published_at", ""))[:10] == today:
+            return True
+    return False
+
+
 def generate(topic, guidance, link_text, link_url):
     guidance_block = f"{guidance}" if guidance else ""
     text_link = link_text or "Подробнее"
@@ -205,6 +213,13 @@ def send_message(text):
 
 def main():
     topics = load_topics()
+
+    # Защита от дублей: несколько cron-запусков в день публикуют только один пост.
+    # При ручном запуске (workflow_dispatch/repository_dispatch) защита отключается.
+    if os.environ.get("GITHUB_EVENT_NAME") == "schedule" and already_published_today(topics):
+        print("Сегодня уже был опубликован пост — резервный запуск пропущен.")
+        return
+
     idx = pick_topic(topics)
     if idx is None:
         print("Нет тем к публикации на сегодня."); return
