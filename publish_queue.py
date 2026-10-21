@@ -1,27 +1,37 @@
-"""Выполняет очередь публикаций из publish_queue.json.
+"""Очередь публикаций.
 
-Очередь — обычный файл в репозитории, поэтому публикацию можно запустить
-просто коммитом: вписать задачу в publish_queue.json и запушить.
+Задачи живут в publish_queue.json (правите вы), отметка о выполнении —
+в кеше Actions (её пишет workflow), поэтому workflow больше ничего не
+коммитит в main и не конфликтует с вашими коммитами.
 
-Пример файла очереди:
+Пример publish_queue.json:
     {
-      "pinned": true,
+      "pinned": false,
       "delete_ids": [],
-      "max": {"post_id": "all"},
-      "posts": {"post_id": "all", "mode": "cta"}
+      "max_check": false,
+      "max_watch": true,
+      "max_updates": false,
+      "max": null,
+      "posts": {"post_id": "all", "mode": "cta", "delete_ids": []}
     }
-
-- "pinned": true — опубликовать и закрепить пост-визитку.
-- "posts.post_id": "all" или id из posts_rewrite.json.
-- "posts.delete_ids": старые посты, которые нужно удалить (только если
-  post_id публикует новые посты, а не редактирует существующие).
 """
+import hashlib
 import json
 import os
 import subprocess
 import sys
 
-QUEUE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "publish_queue.json")
+BASE = os.path.dirname(os.path.abspath(__file__))
+QUEUE_FILE = os.path.join(BASE, "publish_queue.json")
+
+
+def run(script, *args):
+    cmd = [sys.executable, script, *args]
+    print("$", " ".join(cmd), flush=True)
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        print("Ошибка:", script, result.returncode)
+    return result.returncode == 0
 
 
 def delete_posts(message_ids):
@@ -45,47 +55,53 @@ def delete_posts(message_ids):
     return ok
 
 
-def run(script, *args):
-    cmd = [sys.executable, script, *args]
-    print("$", " ".join(cmd), flush=True)
-    result = subprocess.run(cmd)
-    if result.returncode != 0:
-        print("Ошибка:", script, result.returncode)
-    return result.returncode == 0
-
-
 def main():
     with open(QUEUE_FILE, encoding="utf-8") as f:
-        queue = json.load(f)
+        raw = f.read()
+    queue = json.loads(raw)
 
-    done = False
+    digest = hashlib.sha256(raw.strip().encode()).hexdigest()[:16]
+    if "--hash-only" in sys.argv:
+        print(digest)
+        return
+    done = os.environ.get("QUEUE_DONE_HASH", "").strip()
+    if done == digest:
+        print("Очередь уже выполнялась (хэш", digest, ") — пропускаю.")
+        return
 
-    if queue.get("pinned"):
-        print("=== Публикация и закрепление поста-визитки ===")
-        done = run("publish_pinned.py") or done
-
-    delete_ids = queue.get("delete_ids") or []
-    if delete_ids:
-        print("=== Удаление постов:", delete_ids, "===")
-        done = delete_posts(delete_ids) or done
+    ok = True
 
     if queue.get("max_watch"):
         print("=== Наблюдение за событиями MAX-бота ===")
-        done = run("max_watch.py") or done
+        ok = run("max_watch.py") and ok
 
     if queue.get("max_updates"):
         print("=== События MAX-бота ===")
-        done = run("publish_max.py", "--updates") or done
+        ok = run("publish_max.py", "--updates") or ok
+
+    if queue.get("max_ping_chat_id"):
+        os.environ["MAX_PING_CHAT_ID"] = str(queue["max_ping_chat_id"])
+
+    if queue.get("max_ping"):
+        print("=== Проверка связи с MAX-ботом ===")
+        ok = run("publish_max.py", "--ping") and ok
 
     if queue.get("max_check"):
         print("=== Диагностика MAX-бота ===")
-        done = run("publish_max.py", "--check") or done
+        ok = run("publish_max.py", "--check") and ok
 
-    max_task = queue.get("max")
-    if max_task:
-        post_id = max_task.get("post_id", "all")
+    if queue.get("max"):
+        post_id = queue["max"].get("post_id", "all")
         print(f"=== Публикация в MAX: {post_id} ===")
-        done = run("publish_max.py", post_id) or done
+        ok = run("publish_max.py", post_id) and ok
+
+    if queue.get("pinned"):
+        print("=== Публикация и закрепление поста-визитки ===")
+        ok = run("publish_pinned.py") and ok
+
+    if queue.get("delete_ids"):
+        print("=== Удаление постов:", queue["delete_ids"], "===")
+        ok = delete_posts(queue["delete_ids"]) and ok
 
     posts = queue.get("posts")
     if posts:
@@ -96,12 +112,13 @@ def main():
         args = [post_id, "--mode", mode]
         if delete_ids:
             args += ["--delete", " ".join(str(i) for i in delete_ids)]
-        done = run("publish_posts.py", *args) or done
+        ok = run("publish_posts.py", *args) and ok
 
-    if not done:
-        print("Очередь пуста или шаги не выполнены — проверьте publish_queue.json")
-    else:
-        print("Очередь выполнена.")
+    if not ok:
+        print("Очередь выполнена с ошибками — отметка не записана.")
+        sys.exit(1)
+
+    print("QUEUE_DONE_HASH:", digest)
 
 
 if __name__ == "__main__":

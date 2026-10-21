@@ -1,7 +1,8 @@
-"""Следит за событиями MAX-бота и сохраняет их в репозитории.
+"""Следит за событиями MAX-бота.
 
 Событие bot_added содержит chat_id канала, в который бота добавили.
-События не теряются: offset хранится в max_offset.txt, журнал — в max_events.log.
+Offset и журнал хранятся в кеше Actions (max-watch workflow), поэтому
+ничего не коммитится в main.
 """
 import json
 import os
@@ -10,6 +11,7 @@ from publish_max import TOKEN, call
 
 OFFSET_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "max_offset.txt")
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "max_events.log")
+CHANNEL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "max_channel_id.txt")
 
 
 def load_offset():
@@ -43,6 +45,9 @@ def main():
             try:
                 chat = call("GET", f"chats/{chat_id}")
                 print("Бот добавлен в чат:", chat.get("title"), "| chat_id:", chat_id)
+                with open(CHANNEL_FILE, "w", encoding="utf-8") as f:
+                    f.write(str(chat_id))
+                print("chat_id сохранён в max_channel_id.txt")
             except RuntimeError as e:
                 print("Чат найден, но недоступен боту:", e)
 

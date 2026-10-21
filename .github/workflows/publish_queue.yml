@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   publish:
@@ -19,31 +19,38 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - name: Сертификаты Минцифры (нужны для API MAX)
+      - name: Сертификаты Минцифры
         env:
           REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
         run: |
-          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o /tmp/russian_trusted_root_ca.crt
-          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_sub_ca_pem.crt -o /tmp/russian_trusted_sub_ca.crt
-          sudo cp /tmp/russian_trusted_root_ca.crt /usr/local/share/ca-certificates/russian_trusted_root_ca.crt
-          sudo cp /tmp/russian_trusted_sub_ca.crt /usr/local/share/ca-certificates/russian_trusted_sub_ca.crt
+          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o /tmp/root.crt
+          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_sub_ca_pem.crt -o /tmp/sub.crt
+          sudo cp /tmp/root.crt /usr/local/share/ca-certificates/russian_trusted_root_ca.crt
+          sudo cp /tmp/sub.crt /usr/local/share/ca-certificates/russian_trusted_sub_ca.crt
           sudo update-ca-certificates
+      - name: Восстановить отметку о выполнении
+        uses: actions/cache/restore@v4
+        with:
+          path: .queue_done
+          key: publish-queue-done-${{ github.run_id }}
+          restore-keys: publish-queue-done-
+      - name: Прочитать отметку
+        id: done
+        run: echo "value=$(cat .queue_done 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
       - name: Выполнить очередь
         env:
-          REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+          QUEUE_DONE_HASH: ${{ steps.done.outputs.value }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
           MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
           MAX_CHANNEL_ID: ${{ secrets.MAX_CHANNEL_ID }}
-        run: |
-          python publish_queue.py
-      - name: Очистить очередь
-        run: |
-          python -c "import json; json.dump({'pinned': False, 'delete_ids': [], 'max_check': False, 'max': None, 'posts': None}, open('publish_queue.json','w'), ensure_ascii=False, indent=2)"
-          git config user.name "personalartru"
-          git config user.email "personalartru@users.noreply.github.com"
-          git add publish_queue.json
-          git diff --cached --quiet || git commit -m "chore: очищена очередь публикации [skip ci]" || true
-          git pull --rebase --autostash origin ${{ github.ref_name }} || true
-          git push origin HEAD:${{ github.ref_name }} || true
+          REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+        run: python publish_queue.py
+      - name: Сохранить отметку
+        run: python publish_queue.py --hash-only > .queue_done
+      - name: Сохранить в кеш
+        uses: actions/cache/save@v4
+        with:
+          path: .queue_done
+          key: publish-queue-done-${{ github.run_id }}

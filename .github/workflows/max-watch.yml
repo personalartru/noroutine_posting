@@ -2,11 +2,11 @@ name: Watch MAX bot events
 
 on:
   schedule:
-    - cron: "*/9 * * * *"
+    - cron: "*/4 * * * *"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   watch:
@@ -26,17 +26,38 @@ jobs:
           sudo cp /tmp/root.crt /usr/local/share/ca-certificates/russian_trusted_root_ca.crt
           sudo cp /tmp/sub.crt /usr/local/share/ca-certificates/russian_trusted_sub_ca.crt
           sudo update-ca-certificates
+      - name: Восстановить offset и журнал
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            max_offset.txt
+            max_events.log
+            max_channel_id.txt
+          key: max-watch-state-${{ github.run_id }}
+          restore-keys: max-watch-state-
       - name: Собрать события
         env:
           MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
           MAX_CHANNEL_ID: ${{ secrets.MAX_CHANNEL_ID }}
           REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
         run: python max_watch.py
-      - name: Сохранить журнал и offset
+      - name: Опубликовать посты запуска, если канал найден
+        env:
+          MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
+          REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
         run: |
-          git config user.name "personalartru"
-          git config user.email "personalartru@users.noreply.github.com"
-          git add max_events.log max_offset.txt
-          git diff --cached --quiet || git commit -m "chore: события MAX-бота [skip ci]" || true
-          git pull --rebase --autostash origin main || true
-          git push origin HEAD:main || true
+          if [ -s max_channel_id.txt ]; then
+            ID=$(cat max_channel_id.txt)
+            echo "Канал найден: $ID — публикую посты запуска"
+            MAX_CHANNEL_ID="$ID" python publish_max.py all
+          else
+            echo "Канал пока не найден — жду события bot_added"
+          fi
+      - name: Сохранить состояние
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            max_offset.txt
+            max_events.log
+            max_channel_id.txt
+          key: max-watch-state-${{ github.run_id }}
