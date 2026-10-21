@@ -20,6 +20,8 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - name: Сертификаты Минцифры (нужны для API MAX)
+        env:
+          REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
         run: |
           curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o /tmp/russian_trusted_root_ca.crt
           curl -fsSL https://gu-st.ru/content/lending/russian_trusted_sub_ca_pem.crt -o /tmp/russian_trusted_sub_ca.crt
@@ -28,6 +30,7 @@ jobs:
           sudo update-ca-certificates
       - name: Выполнить очередь
         env:
+          REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
