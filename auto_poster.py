@@ -1,6 +1,7 @@
 import json, os, re, sys, datetime
 import requests
 from PIL import Image, ImageDraw, ImageFont
+from max_poster import publish_to_max
 
 BOT_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
 CHANNEL_ID  = os.environ["TELEGRAM_CHANNEL_ID"]
@@ -251,10 +252,12 @@ def main():
     try:
         # Если в админке указана своя картинка — берем её, иначе генерируем карточку
         custom_image = item.get("imageUrl")
+        image_source = custom_image
         if custom_image:
             res_photo = send_photo(custom_image)
         else:
             card_path = create_branded_card(s['title'])
+            image_source = card_path
             res_photo = send_photo(card_path)
 
         if not res_photo.get("ok"):
@@ -265,6 +268,11 @@ def main():
     res = send_message(full_text)
 
     if res.get("ok"):
+        try:
+            publish_to_max(full_text, image_source)
+        except Exception as e:
+            print("Предупреждение: не удалось опубликовать пост в MAX:", e)
+
         item["status"] = "published"
         item["published_at"] = datetime.datetime.utcnow().isoformat()
         save_topics(topics)
