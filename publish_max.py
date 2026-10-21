@@ -36,8 +36,27 @@ def call(method, path, query=None, body=None):
     return r.json()
 
 
+def resolve_chat_id():
+    """У MAX chat_id канала отрицательный: -71062363105923, а не 71062363105923."""
+    global CHANNEL_ID
+    candidates = [CHANNEL_ID]
+    if not CHANNEL_ID.startswith("-"):
+        candidates.append(f"-{CHANNEL_ID}")
+    for candidate in candidates:
+        try:
+            call("GET", f"chats/{candidate}")
+            if candidate != CHANNEL_ID:
+                print("chat_id уточнён:", candidate)
+            CHANNEL_ID = candidate
+            return CHANNEL_ID
+        except RuntimeError:
+            continue
+    return CHANNEL_ID
+
+
 def check():
     """Диагностика: бот живой, видит ли канал, что закреплено."""
+    resolve_chat_id()
     me = call("GET", "me")
     print("Бот:", me.get("username"), "|", me.get("name") or me.get("first_name"))
     try:
@@ -152,6 +171,7 @@ def pin(message_id):
 
 
 def main():
+    resolve_chat_id()
     if "--check" in sys.argv:
         check()
         return
