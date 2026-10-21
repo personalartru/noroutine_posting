@@ -67,6 +67,16 @@ def check():
         print("Канал недоступен боту:", e)
         print("  -> добавьте бота администратором канала и проверьте MAX_CHANNEL_ID")
     try:
+        messages = call("GET", "messages", query={"chat_id": CHANNEL_ID, "limit": 10})
+        items = messages.get("messages") or []
+        print("Постов в канале (по API):", len(items))
+        for item in items[:6]:
+            body = (item.get("body") or {})
+            text = (body.get("text") or "").replace("\n", " ")
+            print("  -", text[:90])
+    except RuntimeError as e:
+        print("Список постов не прочитан:", e)
+    try:
         pinned = call("GET", f"chats/{CHANNEL_ID}/pin")
         message = pinned.get("message") or pinned
         body = (message or {}).get("body") or {}
