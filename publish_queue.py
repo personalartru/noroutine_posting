@@ -69,6 +69,10 @@ def main():
         print("=== Удаление постов:", delete_ids, "===")
         done = delete_posts(delete_ids) or done
 
+    if queue.get("max_check"):
+        print("=== Диагностика MAX-бота ===")
+        done = run("publish_max.py", "--check") or done
+
     max_task = queue.get("max")
     if max_task:
         post_id = max_task.get("post_id", "all")

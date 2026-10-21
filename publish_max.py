@@ -36,6 +36,26 @@ def call(method, path, query=None, body=None):
     return r.json()
 
 
+def check():
+    """Диагностика: бот живой, видит ли канал, что закреплено."""
+    me = call("GET", "me")
+    print("Бот:", me.get("username"), "|", me.get("name") or me.get("first_name"))
+    try:
+        chat = call("GET", f"chats/{CHANNEL_ID}")
+        print("Канал:", chat.get("title"), "| подписчиков:", chat.get("members_count") or chat.get("subscriber_count"))
+        print("Описание:", (chat.get("description") or "")[:200].replace("\n", " | "))
+    except RuntimeError as e:
+        print("Канал недоступен боту:", e)
+        print("  -> добавьте бота администратором канала и проверьте MAX_CHANNEL_ID")
+    try:
+        pinned = call("GET", f"chats/{CHANNEL_ID}/pin")
+        message = pinned.get("message") or pinned
+        body = (message or {}).get("body") or {}
+        print("Закреплённый пост:", body.get("mid"), "->", (body.get("text") or "")[:80])
+    except RuntimeError as e:
+        print("Закреп не читается:", e)
+
+
 def make_card(title):
     from PIL import Image, ImageDraw, ImageFont
 
@@ -112,6 +132,10 @@ def pin(message_id):
 
 
 def main():
+    if "--check" in sys.argv:
+        check()
+        return
+
     with open(POSTS_FILE, encoding="utf-8") as f:
         posts = json.load(f)
 
