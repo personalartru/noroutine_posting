@@ -44,6 +44,27 @@ def upload_image(token, path):
     return media_token
 
 
+def resolve_chat_id(token, chat_id):
+    """У MAX chat_id канала отрицательный: -71062363105923, а не 71062363105923."""
+    candidates = [chat_id]
+    if not str(chat_id).startswith("-"):
+        candidates.append(f"-{chat_id}")
+    for candidate in candidates:
+        try:
+            r = requests.get(
+                f"{MAX_API}/chats/{candidate}",
+                headers={"Authorization": token},
+                timeout=30,
+            )
+            if r.status_code == 200:
+                if candidate != chat_id:
+                    print("chat_id уточнён:", candidate)
+                return candidate
+        except requests.exceptions.RequestException:
+            continue
+    return chat_id
+
+
 def publish_to_max(text, image_path=None, token=None, chat_id=None):
     token = token or os.environ.get("MAX_BOT_TOKEN")
     chat_id = chat_id or os.environ.get("MAX_CHANNEL_ID")
@@ -51,6 +72,7 @@ def publish_to_max(text, image_path=None, token=None, chat_id=None):
         print("MAX: нет MAX_BOT_TOKEN/MAX_CHANNEL_ID — публикация в MAX пропущена.")
         return None
 
+    chat_id = resolve_chat_id(token, chat_id)
     body = {"text": text, "format": "html", "notify": True}
 
     if image_path:

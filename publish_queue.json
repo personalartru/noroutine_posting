@@ -1,12 +1,13 @@
 {
   "pinned": false,
   "delete_ids": [],
-  "max_check": true,
+  "max_check": false,
   "max_probe": false,
   "max_watch": false,
   "max_updates": false,
-  "max": {
-    "post_id": "all"
-  },
-  "posts": null
+  "max": null,
+  "posts": {
+    "post_id": "max-announce",
+    "mode": "publish"
+  }
 }
