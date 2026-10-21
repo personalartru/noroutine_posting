@@ -2,9 +2,6 @@
   "pinned": false,
   "delete_ids": [],
   "max_check": false,
-  "max_updates": true,
-  "max_ping": true,
-  "max_ping_chat_id": "485434975",
   "max": null,
   "posts": null
 }
