@@ -1,7 +1,7 @@
 {
   "pinned": false,
   "delete_ids": [],
-  "max_check": true,
+  "max_check": false,
   "max": null,
   "posts": null
 }
