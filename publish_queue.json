@@ -2,6 +2,6 @@
   "pinned": false,
   "delete_ids": [],
   "max_check": false,
-  "max": {"post_id": "all"},
+  "max": null,
   "posts": null
 }
