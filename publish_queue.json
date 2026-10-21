@@ -1,7 +1,9 @@
 {
-  "pinned": false,
-  "delete_ids": [],
-  "max_check": true,
+  "pinned": true,
+  "delete_ids": [
+    153
+  ],
+  "max_check": false,
   "max_probe": false,
   "max_watch": false,
   "max_updates": false,
