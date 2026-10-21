@@ -46,6 +46,22 @@ def publish(post):
     return sent["message_id"]
 
 
+def edit(post):
+    message_id = post.get("replace_id")
+    if not message_id:
+        print("Пропущен (нет старого поста для замены):", post["id"])
+        return None
+    try:
+        api("editMessageText", chat_id=CHANNEL_ID, message_id=message_id,
+            text=build_text(post), parse_mode="HTML")
+        print("Обновлён:", post["id"], "-> message_id", message_id)
+        return message_id
+    except RuntimeError as e:
+        print("Не удалось отредактировать", post["id"], f"({message_id}):", e)
+        print("  -> отправьте этот пост заново: --mode publish")
+        return None
+
+
 def delete(message_ids):
     for message_id in message_ids:
         try:
@@ -58,6 +74,7 @@ def delete(message_ids):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("post", help="id поста из posts_rewrite.json или all")
+    parser.add_argument("--mode", choices=["publish", "edit", "both"], default="publish")
     parser.add_argument("--delete", nargs="*", type=str, default=[])
     args = parser.parse_args()
 
@@ -73,7 +90,15 @@ def main():
             return
 
     for post in selected:
-        publish(post)
+        if args.mode == "edit":
+            edit(post)
+        elif args.mode == "publish":
+            publish(post)
+        else:
+            if post.get("replace_id"):
+                edit(post)
+            else:
+                publish(post)
 
     ids = []
     for chunk in args.delete:

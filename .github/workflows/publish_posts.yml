@@ -3,13 +3,22 @@ name: Publish rewritten posts
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "edit — обновить старые посты на месте; publish — отправить новые; both — и то и другое"
+        required: true
+        default: "edit"
+        type: choice
+        options:
+          - edit
+          - publish
+          - both
       post_id:
         description: "id поста из posts_rewrite.json или all"
         required: true
         default: "all"
         type: string
       delete_ids:
-        description: "ID старых постов на удаление через пробел: 116 118 119 121 122"
+        description: "ID старых постов на удаление через пробел (нужно только для режима publish)"
         required: false
         type: string
 
@@ -28,4 +37,4 @@ jobs:
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
         run: |
-          python publish_posts.py "${{ inputs.post_id }}" --delete ${{ inputs.delete_ids }}
+          python publish_posts.py "${{ inputs.post_id }}" --mode "${{ inputs.mode }}" --delete ${{ inputs.delete_ids }}
