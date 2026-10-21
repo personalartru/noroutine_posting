@@ -1,0 +1,31 @@
+name: Publish rewritten posts
+
+on:
+  workflow_dispatch:
+    inputs:
+      post_id:
+        description: "id поста из posts_rewrite.json или all"
+        required: true
+        default: "all"
+        type: string
+      delete_ids:
+        description: "ID старых постов на удаление через пробел: 116 118 119 121 122"
+        required: false
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Publish posts
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
+        run: |
+          python publish_posts.py "${{ inputs.post_id }}" --delete ${{ inputs.delete_ids }}

@@ -4,6 +4,7 @@
     python publish_posts.py tracker-triggers
     python publish_posts.py all
     python publish_posts.py tracker-triggers --delete 142 143
+    python publish_posts.py all --delete "116 118 119 121 122"
 
 Опции:
     --delete ID [ID ...]  — удалить старые «голые» посты (нужно право
@@ -57,7 +58,7 @@ def delete(message_ids):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("post", help="id поста из posts_rewrite.json или all")
-    parser.add_argument("--delete", nargs="*", type=int, default=[])
+    parser.add_argument("--delete", nargs="*", type=str, default=[])
     args = parser.parse_args()
 
     with open(POSTS_FILE, encoding="utf-8") as f:
@@ -74,8 +75,11 @@ def main():
     for post in selected:
         publish(post)
 
-    if args.delete:
-        delete(args.delete)
+    ids = []
+    for chunk in args.delete:
+        ids.extend(int(x) for x in str(chunk).replace(",", " ").split() if x.strip())
+    if ids:
+        delete(ids)
 
 
 if __name__ == "__main__":

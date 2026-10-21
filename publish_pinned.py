@@ -39,7 +39,7 @@ def main():
     if BOT_USERNAME:
         buttons = {
             "inline_keyboard": [[{
-                "text": "Получить 10 шаблонов",
+                "text": "Получить 5 воркфлоу",
                 "url": f"https://t.me/{BOT_USERNAME}?start=pinned",
             }]]
         }
