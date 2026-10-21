@@ -69,6 +69,10 @@ def main():
         print("=== Удаление постов:", delete_ids, "===")
         done = delete_posts(delete_ids) or done
 
+    if queue.get("max_updates"):
+        print("=== События MAX-бота ===")
+        done = run("publish_max.py", "--updates") or done
+
     if queue.get("max_check"):
         print("=== Диагностика MAX-бота ===")
         done = run("publish_max.py", "--check") or done

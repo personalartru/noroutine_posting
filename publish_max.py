@@ -56,6 +56,26 @@ def check():
         print("Закреп не читается:", e)
 
 
+def updates():
+    """События бота: bot_added содержит реальный chat_id канала."""
+    try:
+        data = call("GET", "updates", query={"timeout": 0, "limit": 100})
+    except RuntimeError as e:
+        print("Не удалось получить события:", e)
+        return
+    events = data.get("updates") or []
+    print("Событий:", len(events))
+    seen_chats = {}
+    for event in events:
+        kind = event.get("update_type") or event.get("type")
+        chat_id = event.get("chat_id")
+        if chat_id:
+            seen_chats[chat_id] = kind
+        print(" -", kind, "| chat_id:", chat_id, "|", json.dumps(event, ensure_ascii=False)[:220])
+    if seen_chats:
+        print("\nВозможные chat_id:", seen_chats)
+
+
 def make_card(title):
     from PIL import Image, ImageDraw, ImageFont
 
@@ -134,6 +154,9 @@ def pin(message_id):
 def main():
     if "--check" in sys.argv:
         check()
+        return
+    if "--updates" in sys.argv:
+        updates()
         return
 
     with open(POSTS_FILE, encoding="utf-8") as f:
