@@ -27,6 +27,7 @@ jobs:
           TELEGRAM_CHANNEL_ID:   ${{ secrets.TELEGRAM_CHANNEL_ID }}
           MAX_BOT_TOKEN:         ${{ secrets.MAX_BOT_TOKEN }}
           MAX_CHANNEL_ID:        ${{ secrets.MAX_CHANNEL_ID }}
+          BOT_USERNAME:          ${{ secrets.BOT_USERNAME }}
           OPENAI_API_KEY:        ${{ secrets.OPENAI_API_KEY }}
           POLLINATIONS_API_KEY:  ${{ secrets.POLLINATIONS_API_KEY }}
         run: python auto_poster.py

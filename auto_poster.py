@@ -2,6 +2,7 @@ import json, os, re, sys, datetime
 import requests
 from PIL import Image, ImageDraw, ImageFont
 from max_poster import publish_to_max
+from footer import footer
 
 BOT_TOKEN   = os.environ["TELEGRAM_BOT_TOKEN"]
 CHANNEL_ID  = os.environ["TELEGRAM_CHANNEL_ID"]
@@ -247,7 +248,7 @@ def main():
     s = generate(item["topic"], item.get("guidance", ""), item.get("linkText", ""), item.get("linkUrl", ""), item.get("date", ""))
     
     tags = item.get("tags") or s['tags']
-    full_text = f"<b>{s['title']}</b>\n\n{s['post']}\n\n{tags}"
+    full_text = f"<b>{s['title']}</b>\n\n{s['post']}{footer()}\n\n{tags}"
 
     try:
         # Если в админке указана своя картинка — берем её, иначе генерируем карточку
