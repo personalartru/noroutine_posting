@@ -6,8 +6,9 @@
 Пример файла очереди:
     {
       "pinned": true,
-      "delete_ids": [149],
-      "posts": {"post_id": "all", "mode": "edit", "delete_ids": []}
+      "delete_ids": [],
+      "max": {"post_id": "all"},
+      "posts": {"post_id": "all", "mode": "cta"}
     }
 
 - "pinned": true — опубликовать и закрепить пост-визитку.
@@ -67,6 +68,12 @@ def main():
     if delete_ids:
         print("=== Удаление постов:", delete_ids, "===")
         done = delete_posts(delete_ids) or done
+
+    max_task = queue.get("max")
+    if max_task:
+        post_id = max_task.get("post_id", "all")
+        print(f"=== Публикация в MAX: {post_id} ===")
+        done = run("publish_max.py", post_id) or done
 
     posts = queue.get("posts")
     if posts:
