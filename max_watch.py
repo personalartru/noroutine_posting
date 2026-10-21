@@ -4,6 +4,7 @@
 Offset и журнал хранятся в кеше Actions (max-watch workflow), поэтому
 ничего не коммитится в main.
 """
+import base64
 import json
 import os
 
@@ -12,6 +13,11 @@ from publish_max import TOKEN, call
 OFFSET_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "max_offset.txt")
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "max_events.log")
 CHANNEL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "max_channel_id.txt")
+
+
+def safe(value):
+    """Логи Actions маскируют числа, похожие на секреты. Печатаем в base64."""
+    return base64.b64encode(str(value).encode()).decode()
 
 
 def load_offset():
@@ -38,18 +44,23 @@ def main():
         kind = event.get("update_type") or event.get("type")
         payload = json.dumps(event, ensure_ascii=False)
         lines.append(f"{kind} {payload}")
-        print(" -", kind, "|", payload[:300])
+        print(" -", kind, "| chat_id(b64):", safe(event.get("chat_id")))
 
         chat_id = event.get("chat_id")
         if kind == "bot_added" and chat_id:
             try:
                 chat = call("GET", f"chats/{chat_id}")
-                print("Бот добавлен в чат:", chat.get("title"), "| chat_id:", chat_id)
-                with open(CHANNEL_FILE, "w", encoding="utf-8") as f:
-                    f.write(str(chat_id))
-                print("chat_id сохранён в max_channel_id.txt")
+                chat_type = chat.get("type")
+                print("Бот добавлен в:", chat_type, "|", chat.get("title"),
+                      "| chat_id(b64):", safe(chat_id))
+                if chat_type == "channel":
+                    with open(CHANNEL_FILE, "w", encoding="utf-8") as f:
+                        f.write(str(chat_id))
+                    print("Канал найден — публикация разрешена")
+                else:
+                    print("Это не канал (чат обсуждений/группа) — публикация в него не идёт")
             except RuntimeError as e:
-                print("Чат найден, но недоступен боту:", e)
+                print("Чат недоступен боту:", e)
 
     if events:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
