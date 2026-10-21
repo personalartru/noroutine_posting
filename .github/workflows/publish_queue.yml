@@ -1,0 +1,35 @@
+name: Publish queue
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - publish_queue.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Выполнить очередь
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
+        run: |
+          python publish_queue.py
+      - name: Очистить очередь
+        run: |
+          git config user.name "personalartru"
+          git config user.email "personalartru@users.noreply.github.com"
+          git add publish_queue.json
+          git diff --cached --quiet || git commit -m "chore: очищена очередь публикации [skip ci]" || true
+          git push || true
