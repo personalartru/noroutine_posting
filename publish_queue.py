@@ -6,7 +6,8 @@
 Пример файла очереди:
     {
       "pinned": true,
-      "posts": {"post_id": "all", "delete_ids": [116, 118, 119, 121, 122]}
+      "delete_ids": [149],
+      "posts": {"post_id": "all", "mode": "edit", "delete_ids": []}
     }
 
 - "pinned": true — опубликовать и закрепить пост-визитку.
@@ -20,6 +21,27 @@ import subprocess
 import sys
 
 QUEUE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "publish_queue.json")
+
+
+def delete_posts(message_ids):
+    import requests
+
+    api = "https://api.telegram.org/bot{token}/{method}"
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
+    chat_id = os.environ["TELEGRAM_CHANNEL_ID"]
+    ok = True
+    for message_id in message_ids:
+        r = requests.post(
+            api.format(token=token, method="deleteMessage"),
+            json={"chat_id": chat_id, "message_id": int(message_id)},
+            timeout=60,
+        )
+        if r.status_code == 200:
+            print("Удалён пост:", message_id)
+        else:
+            print("Не удалось удалить", message_id, "-", r.text[:120])
+            ok = False
+    return ok
 
 
 def run(script, *args):
@@ -40,6 +62,11 @@ def main():
     if queue.get("pinned"):
         print("=== Публикация и закрепление поста-визитки ===")
         done = run("publish_pinned.py") or done
+
+    delete_ids = queue.get("delete_ids") or []
+    if delete_ids:
+        print("=== Удаление постов:", delete_ids, "===")
+        done = delete_posts(delete_ids) or done
 
     posts = queue.get("posts")
     if posts:
