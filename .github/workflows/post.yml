@@ -23,8 +23,10 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Сертификаты Минцифры (нужны для API MAX)
         run: |
-          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o /usr/local/share/ca-certificates/russian_trusted_root_ca.crt
-          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_sub_ca_pem.crt -o /usr/local/share/ca-certificates/russian_trusted_sub_ca.crt
+          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o /tmp/russian_trusted_root_ca.crt
+          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_sub_ca_pem.crt -o /tmp/russian_trusted_sub_ca.crt
+          sudo cp /tmp/russian_trusted_root_ca.crt /usr/local/share/ca-certificates/russian_trusted_root_ca.crt
+          sudo cp /tmp/russian_trusted_sub_ca.crt /usr/local/share/ca-certificates/russian_trusted_sub_ca.crt
           sudo update-ca-certificates
       - name: Publish post
         env:
