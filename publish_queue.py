@@ -71,6 +71,10 @@ def main():
 
     ok = True
 
+    if queue.get("max_probe"):
+        print("=== Перебор chat_id канала ===")
+        done = run("max_probe.py") or done
+
     if queue.get("max_watch"):
         print("=== Наблюдение за событиями MAX-бота ===")
         ok = run("max_watch.py") and ok

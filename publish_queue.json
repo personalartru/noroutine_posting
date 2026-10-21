@@ -2,7 +2,8 @@
   "pinned": false,
   "delete_ids": [],
   "max_check": false,
-  "max_watch": true,
+  "max_probe": true,
+  "max_watch": false,
   "max_updates": false,
   "max": null,
   "posts": null
