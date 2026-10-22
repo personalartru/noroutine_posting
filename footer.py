@@ -8,13 +8,13 @@ import os
 BOT_USERNAME = os.environ.get("BOT_USERNAME", "").lstrip("@")
 
 FOOTER = (
-    "\n\n👉 5 готовых n8n-воркфлоу (Трекер, Формы, Google Таблицы, боты в Telegram и MAX) "
-    "— импорт в n8n за минуту, бесплатно: https://t.me/{bot}?start=auto"
+    "\n\n👇 Приветственный бонус: 5 готовых n8n-воркфлоу (импорт в n8n за минуту) "
+    "— бесплатно после подписки:\nhttps://t.me/{bot}?start=auto"
 )
 
 FOOTER_SOURCE = (
-    "\n\n👉 5 готовых n8n-воркфлоу (Трекер, Формы, Google Таблицы, боты в Telegram и MAX) "
-    "— импорт в n8n за минуту, бесплатно: https://t.me/{bot}?start=video"
+    "\n\n👇 Приветственный бонус: 5 готовых n8n-воркфлоу (импорт в n8n за минуту) "
+    "— бесплатно после подписки:\nhttps://t.me/{bot}?start=video"
 )
 
 
