@@ -6,6 +6,7 @@
     <title>NoRoutine • Admin Panel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -21,6 +22,10 @@
         .macos-modal {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(30px);
+        }
+        button[data-active="true"] {
+            border-bottom-color: #3b82f6;
+            color: #2563eb;
         }
     </style>
 </head>
@@ -66,6 +71,73 @@
             <div class="macos-card p-5 rounded-2xl">
                 <div class="text-gray-500 text-xs font-medium uppercase tracking-wider">Суммарно просмотров</div>
                 <div id="stat-views" class="text-2xl font-semibold mt-1 text-purple-600">0</div>
+            </div>
+        </div>
+
+        <!-- Analytics Dashboards -->
+        <div class="macos-card p-5 rounded-2xl mb-8">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-semibold text-lg text-gray-800">📈 Аналитика по каналам</h2>
+                <div class="flex items-center space-x-2 text-sm">
+                    <span class="text-gray-500">Обновлено:</span>
+                    <span id="analytics-update">загрузка...</span>
+                    <button onclick="loadAnalytics()" class="p-1.5 hover:bg-gray-100 rounded-lg">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="analytics-error" class="hidden p-3 bg-red-50 border border-red-200 rounded-lg mb-4 text-red-700 text-sm"></div>
+            <div id="analytics-loading" class="flex justify-center py-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+            <!-- Overall stats per channel -->
+            <div id="analytics-stats" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 hidden">
+                <div class="p 4 rounded-xl border border-gray-200 bg-gradient-to-br from-blue-50 to-white">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-gray-500 text-xs font-medium uppercase tracking-wider flex items-center"><i data-lucide="message-square" class="w-3 h-3 mr-1"></i> Telegram</div>
+                            <div class="text-2xl font-semibold mt-1" id="tg-total-views">–</div>
+                            <div class="text-xs text-gray-500 mt-1">суммарно просмотров</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-semibold text-blue-600" id="tg-subscribers">–</div>
+                            <div class="text-xs text-gray-500">подписчиков</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 rounded-xl border border-gray-200 bg-gradient-to-br from-purple-50 to-white">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-gray-500 text-xs font-medium uppercase tracking-wider flex items-center"><i data-lucide="maximize-2" class="w-3 h-3 mr-1"></i> MAX</div>
+                            <div class="text-2xl font-semibold mt-1" id="max-total-views">–</div>
+                            <div class="text-xs text-gray-500 mt-1">суммарно просмотров</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl font-semibold text-purple-600" id="max-subscribers">–</div>
+                            <div class="text-xs text-gray-500">подписчиков</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Graph Tabs -->
+            <div class="mb-4 border-b border-gray-200">
+                <div class="flex space-x-1">
+                    <button onclick="showGraph('daily', this)" class="px-3 py-1.5 text-sm font-medium rounded-t-lg border-b-2 border-transparent data-active:border-blue-500 data-active:text-blue-600 data-inactive:text-gray-500" data-active="true">По дням</button>
+                    <button onclick="showGraph('subscribers', this)" class="px-3 py-1.5 text-sm font-medium rounded-t-lg border-b-2 border-transparent data-active:border-blue-500 data-active:text-blue-600 data-inactive:text-gray-500" data-active="false">Подписчики</button>
+                    <button onclick="showGraph('posts', this)" class="px-3 py-1.5 text-sm font-medium rounded-t-lg border-b-2 border-transparent data-active:border-blue-500 data-active:text-blue-600 data-inactive:text-gray-500" data-active="false">Топ посты</button>
+                </div>
+            </div>
+            <!-- Chart containers -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <div class="relative">
+                    <canvas id="views-chart" style="height:280px"></canvas>
+                </div>
+                <div class="relative">
+                    <canvas id="daily-comparison-chart" style="height:280px"></canvas>
+                </div>
+            </div>
+            <div class="mb-6">
+                <canvas id="posts-bar-chart" style="height:320px"></canvas>
             </div>
         </div>
 
@@ -371,13 +443,25 @@
             } catch (err) {
                 console.warn('Не удалось загрузить max_channel_stats.json:', err);
             }
+            // После загрузки аналитики обновить сводную статистику
+            setTimeout(updateStatsWidget, 1000);
         }
 
         function updateStatsWidget() {
             const viewsEl = document.getElementById('stat-views');
-            if (viewsEl && maxStats.total_views) {
-                viewsEl.innerText = maxStats.total_views.toLocaleString('ru-RU');
+            if (!viewsEl) return;
+            const maxViews = maxStats.total_views || 0;
+            let tgViews = 0, mxViews = maxViews, total = maxViews;
+            if (analyticsData) {
+                const tg = analyticsData.channels.telegram;
+                const mx = analyticsData.channels.max;
+                tgViews = tg?.total_views || 0;
+                mxViews = mx?.total_views || maxViews;
+                total = tgViews + mxViews;
             }
+            viewsEl.innerText = total.toLocaleString('ru-RU');
+            const tooltip = `Telegram: ${tgViews} просмотров | MAX: ${mxViews} просмотров`;
+            viewsEl.title = tooltip;
         }
 
         async function saveTopicsToGitHub() {
@@ -589,12 +673,173 @@
             closeSettingsModal();
             loadTopics();
             loadMAXStats();
+            loadAnalytics();
+        }
+
+        // ---------- Analytics ----------
+        let analyticsData = null;
+        let charts = {};
+
+        async function loadAnalytics() {
+            const { repo, token } = getSettings();
+            document.getElementById('analytics-loading').classList.remove('hidden');
+            document.getElementById('analytics-stats').classList.add('hidden');
+            document.getElementById('analytics-error').classList.add('hidden');
+            try {
+                const res = await fetch(`https://raw.githubusercontent.com/${repo}/main/analytics.json`);
+                if (!res.ok) throw new Error('Аналитика не найдена');
+                analyticsData = await res.json();
+                document.getElementById('analytics-update').textContent = new Date(analyticsData.updated_at).toLocaleString('ru');
+                renderAnalyticsWidgets();
+                renderGraphs();
+                document.getElementById('analytics-loading').classList.add('hidden');
+                document.getElementById('analytics-stats').classList.remove('hidden');
+            } catch (err) {
+                console.warn('Analytics fetch failed:', err);
+                document.getElementById('analytics-error').classList.remove('hidden');
+                document.getElementById('analytics-error').textContent = 'Аналитика временно недоступна. Запустите workflow sync-analytics в noroutine_growth.';
+                document.getElementById('analytics-loading').classList.add('hidden');
+            }
+        }
+
+        function renderAnalyticsWidgets() {
+            const tg = analyticsData.channels.telegram;
+            const mx = analyticsData.channels.max;
+            document.getElementById('tg-total-views').textContent = tg?.total_views?.toLocaleString('ru') || '—';
+            document.getElementById('tg-subscribers').textContent = tg?.subscribers?.toLocaleString('ru') || '—';
+            document.getElementById('max-total-views').textContent = mx?.total_views?.toLocaleString('ru') || '—';
+            document.getElementById('max-subscribers').textContent = mx?.subscribers?.toLocaleString('ru') || '—';
+        }
+
+        function showGraph(graphName, btn) {
+            document.querySelectorAll('#analytics-stats ~ div button').forEach(b => b.dataset.active = 'false');
+            btn.dataset.active = 'true';
+            // Show corresponding charts (we have only one mode for now)
+            // Could extend to show different data.
+        }
+
+        function renderGraphs() {
+            const tg = analyticsData.channels.telegram;
+            const mx = analyticsData.channels.max;
+            if (!tg) return;
+            // Prepare daily data: merge Telegram and MAX timelines
+            const tgDaily = tg.daily || [];
+            const mxDaily = (mx && mx.daily) || [];
+            // Combine and sort by date
+            const allDates = [...new Set([...tgDaily.map(d => d.date), ...mxDaily.map(d => d.date)])].sort();
+            const tgViews = allDates.map(date => {
+                const entry = tgDaily.find(d => d.date === date);
+                return entry ? entry.new_views : 0;
+            });
+            const mxViews = allDates.map(date => {
+                const entry = mxDaily.find(d => d.date === date);
+                return entry ? entry.new_views : 0;
+            });
+            const tgCumulative = [];
+            const mxCumulative = [];
+            let tgSum = 0, mxSum = 0;
+            tgViews.forEach((v, i) => { tgSum += v; tgCumulative.push(tgSum); });
+            mxViews.forEach((v, i) => { mxSum += v; mxCumulative.push(mxSum); });
+
+            // Line chart for daily new views
+            if (charts.viewsChart) charts.viewsChart.destroy();
+            const ctx1 = document.getElementById('views-chart').getContext('2d');
+            charts.viewsChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: allDates.map(d => d.split('-').slice(1).join('-')), // "MM-DD"
+                    datasets: [
+                        {
+                            label: 'Telegram (новые)',
+                            data: tgViews,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.3,
+                            fill: true
+                        },
+                        {
+                            label: 'MAX (новые)',
+                            data: mxViews,
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            tension: 0.3,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { title: { display: true, text: 'Новые просмотры по дням' } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+
+            // Bar chart for cumulative comparison
+            if (charts.comparisonChart) charts.comparisonChart.destroy();
+            const ctx2 = document.getElementById('daily-comparison-chart').getContext('2d');
+            charts.comparisonChart = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: allDates.slice(-14), // last 14 days
+                    datasets: [
+                        {
+                            label: 'Telegram',
+                            data: tgCumulative.slice(-14),
+                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                            borderColor: '#3b82f6',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'MAX',
+                            data: mxCumulative.slice(-14),
+                            backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                            borderColor: '#8b5cf6',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { title: { display: true, text: 'Суммарные просмотры (2 недели)' } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+
+            // Top posts bar chart (Telegram only, MAX аналогично)
+            const tgPosts = tg.posts || [];
+            const topPosts = tgPosts.sort((a, b) => b.views - a.views).slice(0, 12);
+            if (topPosts.length) {
+                if (charts.postsChart) charts.postsChart.destroy();
+                const ctx3 = document.getElementById('posts-bar-chart').getContext('2d');
+                charts.postsChart = new Chart(ctx3, {
+                    type: 'horizontalBar',
+                    data: {
+                        labels: topPosts.map(p => p.text ? p.text.replace(/(.{30})..+/, "$1…") : 'ID ' + p.id),
+                        datasets: [{
+                            label: 'Просмотры',
+                            data: topPosts.map(p => p.views),
+                            backgroundColor: topPosts.map(p => p.views > 100 ? '#10b981' : '#3b82f6'),
+                            borderColor: '#059669',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { title: { display: true, text: 'Топ постов Telegram по просмотрам' } },
+                        scales: {
+                            x: { beginAtZero: true },
+                            y: { ticks: { callback: function(val, index) { return (this.getLabelForValue(val).length > 30) ? this.getLabelForValue(val).substring(0,30)+'…' : this.getLabelForValue(val); } } }
+                        }
+                    }
+                });
+            }
         }
 
         window.onload = () => {
             lucide.createIcons();
             loadTopics();
             loadMAXStats();
+            loadAnalytics();
         };
     </script>
 </body>
