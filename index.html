@@ -358,6 +358,28 @@
             lucide.createIcons();
         }
 
+
+        let maxStats = { total_views: 0, posts: [] };
+
+        async function loadMAXStats() {
+            try {
+                const res = await fetch('max_channel_stats.json');
+                if (res.ok) {
+                    maxStats = await res.json();
+                    updateStatsWidget();
+                }
+            } catch (err) {
+                console.warn('Не удалось загрузить max_channel_stats.json:', err);
+            }
+        }
+
+        function updateStatsWidget() {
+            const viewsEl = document.getElementById('stat-views');
+            if (viewsEl && maxStats.total_views) {
+                viewsEl.innerText = maxStats.total_views.toLocaleString('ru-RU');
+            }
+        }
+
         async function saveTopicsToGitHub() {
             const { repo, token } = getSettings();
             const contentEncoded = btoa(unescape(encodeURIComponent(JSON.stringify(topics, null, 2))));
@@ -566,11 +588,13 @@
             localStorage.setItem('gh_token', document.getElementById('settings-token').value);
             closeSettingsModal();
             loadTopics();
+            loadMAXStats();
         }
 
         window.onload = () => {
             lucide.createIcons();
             loadTopics();
+            loadMAXStats();
         };
     </script>
 </body>
