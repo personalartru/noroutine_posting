@@ -327,33 +327,43 @@
 
         async function loadTopics() {
             const { repo, token } = getSettings();
-            // Попробуем загрузить через raw (без токена)
+            let rawOk = false;
+            // Попробуем загрузить контент через raw (без токена)
             try {
                 const rawRes = await fetch(`https://raw.githubusercontent.com/${repo}/main/topics.json`);
                 if (rawRes.ok) {
                     topics = await rawRes.json();
-                    render();
-                    return;
+                    rawOk = true;
                 }
             } catch {} // ignore raw failure
-            // Если raw не сработал, попробуем через API с токеном (если он есть)
-            if (!token) {
-                openSettingsModal();
-                return;
-            }
+            // Попробуем получить sha файла через публичный API (без токена для публичных репозиториев)
             try {
-                const res = await fetch(`https://api.github.com/repos/${repo}/contents/topics.json`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!res.ok) throw new Error('Не удалось загрузить topics.json. Проверьте токен.');
-                const data = await res.json();
-                fileSha = data.sha;
-                const content = JSON.parse(decodeURIComponent(escape(atob(data.content))));
-                topics = content;
-                render();
-            } catch (err) {
-                alert(err.message);
+                const shaRes = await fetch(`https://api.github.com/repos/${repo}/contents/topics.json`);
+                if (shaRes.ok) {
+                    const shaData = await shaRes.json();
+                    fileSha = shaData.sha;
+                }
+            } catch {} // ignore sha fetch failure
+            // Если контент не загрузился через raw, пробуем API с токеном
+            if (!rawOk) {
+                if (!token) {
+                    openSettingsModal();
+                    return;
+                }
+                try {
+                    const res = await fetch(`https://api.github.com/repos/${repo}/contents/topics.json`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!res.ok) throw new Error('Не удалось загрузить topics.json. Проверьте токен.');
+                    const data = await res.json();
+                    fileSha = data.sha;
+                    const content = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+                    topics = content;
+                } catch (err) {
+                    alert(err.message);
+                }
             }
+            render();
         }
 
         function renderTagsSelector(selectedTags = '') {
@@ -494,6 +504,10 @@
 
         async function saveTopicsToGitHub() {
             const { repo, token } = getSettings();
+            if (!token) {
+                openSettingsModal();
+                throw new Error('Настройте GitHub Personal Access Token для сохранения постов');
+            }
             const contentEncoded = btoa(unescape(encodeURIComponent(JSON.stringify(topics, null, 2))));
 
             const res = await fetch(`https://api.github.com/repos/${repo}/contents/topics.json`, {
