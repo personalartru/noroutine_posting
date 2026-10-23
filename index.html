@@ -719,9 +719,14 @@
                 analyticsData = await res.json();
                 document.getElementById('analytics-update').textContent = new Date(analyticsData.updated_at).toLocaleString('ru');
                 renderAnalyticsWidgets();
-                renderGraphs();
                 document.getElementById('analytics-loading').classList.add('hidden');
                 document.getElementById('analytics-stats').classList.remove('hidden');
+                // Графики рендерим отдельно: ошибка одного не должна скрывать блок
+                try {
+                    renderGraphs();
+                } catch (chartErr) {
+                    console.error('Chart render error:', chartErr);
+                }
             } catch (err) {
                 console.warn('Analytics fetch failed:', err);
                 document.getElementById('analytics-error').classList.remove('hidden');
@@ -753,7 +758,11 @@
             }
             // If charts haven't been rendered yet, render them
             if (graphName === 'subscribers' && !charts.subscribersChart) {
-                renderSubscribersCharts();
+                try {
+                    renderSubscribersCharts();
+                } catch (e) {
+                    console.error('Subscribers chart error:', e);
+                }
             }
         }
 
@@ -844,7 +853,12 @@
                 }
             });
 
-            renderTopPostsChart();
+            try {
+                renderTopPostsChart();
+            } catch (e) {
+                console.error('Top posts chart error:', e);
+            }
+        }
 
         function renderSubscribersCharts() {
             const tg = analyticsData.channels.telegram;
@@ -939,6 +953,7 @@
                     }
                 });
             }
+        }
 
         function renderTopPostsChart() {
             const tg = analyticsData.channels.telegram;
@@ -950,7 +965,7 @@
                 const ctx = document.getElementById('posts-bar-chart');
                 if (!ctx) return;
                 charts.postsChart = new Chart(ctx.getContext('2d'), {
-                    type: 'horizontalBar',
+                    type: 'bar',
                     data: {
                         labels: topPosts.map(p => p.text ? p.text.replace(/(.{30})..+/, "$1…") : 'ID ' + p.id),
                         datasets: [{
@@ -962,11 +977,12 @@
                         }]
                     },
                     options: {
+                        indexAxis: 'y',
                         responsive: true,
                         plugins: { title: { display: true, text: 'Топ постов Telegram по просмотрам' } },
                         scales: {
                             x: { beginAtZero: true },
-                            y: { ticks: { callback: function(val, index) { return (this.getLabelForValue(val).length > 30) ? this.getLabelForValue(val).substring(0,30)+'…' : this.getLabelForValue(val); } } }
+                            y: { ticks: { callback: function(val, index) { const label = this.getLabelForValue(val); return (label.length > 30) ? label.substring(0,30)+'…' : label; } } }
                         }
                     }
                 });
