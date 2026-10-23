@@ -27,6 +27,12 @@
             border-bottom-color: #3b82f6;
             color: #2563eb;
         }
+        .chart-tab {
+            display: none;
+        }
+        .chart-tab.active {
+            display: block;
+        }
     </style>
 </head>
 <body class="min-h-screen pb-12">
@@ -128,16 +134,30 @@
                 </div>
             </div>
             <!-- Chart containers -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                <div class="relative">
-                    <canvas id="views-chart" style="height:280px"></canvas>
-                </div>
-                <div class="relative">
-                    <canvas id="daily-comparison-chart" style="height:280px"></canvas>
+            <div id="tab-daily" class="chart-tab active">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    <div class="relative">
+                        <canvas id="views-chart" style="height:280px"></canvas>
+                    </div>
+                    <div class="relative">
+                        <canvas id="daily-comparison-chart" style="height:280px"></canvas>
+                    </div>
                 </div>
             </div>
-            <div class="mb-6">
-                <canvas id="posts-bar-chart" style="height:320px"></canvas>
+            <div id="tab-subscribers" class="chart-tab hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="relative">
+                        <canvas id="subscribers-chart" style="height:300px"></canvas>
+                    </div>
+                    <div class="relative">
+                        <canvas id="subscribers-delta-chart" style="height:300px"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div id="tab-posts" class="chart-tab hidden">
+                <div class="mb-6">
+                    <canvas id="posts-bar-chart" style="height:380px"></canvas>
+                </div>
             </div>
         </div>
 
@@ -714,8 +734,19 @@
         function showGraph(graphName, btn) {
             document.querySelectorAll('#analytics-stats ~ div button').forEach(b => b.dataset.active = 'false');
             btn.dataset.active = 'true';
-            // Show corresponding charts (we have only one mode for now)
-            // Could extend to show different data.
+            // Hide all charts
+            document.querySelectorAll('.chart-tab').forEach(el => el.classList.remove('active', 'hidden'));
+            document.querySelectorAll('.chart-tab').forEach(el => el.classList.add('hidden'));
+            // Show selected tab
+            const tab = document.getElementById(`tab-${graphName}`);
+            if (tab) {
+                tab.classList.remove('hidden');
+                tab.classList.add('active');
+            }
+            // If charts haven't been rendered yet, render them
+            if (graphName === 'subscribers' && !charts.subscribersChart) {
+                renderSubscribersCharts();
+            }
         }
 
         function renderGraphs() {
@@ -805,13 +836,112 @@
                 }
             });
 
-            // Top posts bar chart (Telegram only, MAX аналогично)
+            renderTopPostsChart();
+
+        function renderSubscribersCharts() {
+            const tg = analyticsData.channels.telegram;
+            const mx = analyticsData.channels.max;
+            if (!tg) return;
+            const tgDaily = tg.daily || [];
+            const mxDaily = (mx && mx.daily) || [];
+            const allDates = [...new Set([...tgDaily.map(d => d.date), ...mxDaily.map(d => d.date)])].sort();
+            // Subscribers over time for each channel
+            const tgSubs = allDates.map(date => {
+                const entry = tgDaily.find(d => d.date === date);
+                return entry && entry.subscribers !== undefined ? entry.subscribers : null;
+            }).filter(v => v !== null);
+            const mxSubs = allDates.map(date => {
+                const entry = mxDaily.find(d => d.date === date);
+                return entry && entry.subscribers !== undefined ? entry.subscribers : null;
+            }).filter(v => v !== null);
+            const filteredDates = allDates.slice(-30); // last month
+            const filteredTgSubs = tgSubs.slice(-30);
+            const filteredMxSubs = mxSubs.slice(-30);
+            // Subscribers chart
+            if (charts.subscribersChart) charts.subscribersChart.destroy();
+            const ctx1 = document.getElementById('subscribers-chart');
+            if (ctx1) {
+                charts.subscribersChart = new Chart(ctx1.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: filteredDates.map(d => d.split('-').slice(1).join('-')),
+                        datasets: [
+                            {
+                                label: 'Telegram подписчики',
+                                data: filteredTgSubs,
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                tension: 0.3,
+                                fill: true
+                            },
+                            {
+                                label: 'MAX подписчики',
+                                data: filteredMxSubs,
+                                borderColor: '#8b5cf6',
+                                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                                tension: 0.3,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { title: { display: true, text: 'Динамика подписчиков' } },
+                        scales: { y: { beginAtZero: false } }
+                    }
+                });
+            }
+            // Delta chart
+            if (charts.subscribersDeltaChart) charts.subscribersDeltaChart.destroy();
+            const ctx2 = document.getElementById('subscribers-delta-chart');
+            if (ctx2) {
+                const tgDeltas = [];
+                for (let i = 1; i < filteredTgSubs.length; i++) {
+                    tgDeltas.push(filteredTgSubs[i] - filteredTgSubs[i - 1]);
+                }
+                const mxDeltas = [];
+                for (let i = 1; i < filteredMxSubs.length; i++) {
+                    mxDeltas.push(filteredMxSubs[i] - filteredMxSubs[i - 1]);
+                }
+                charts.subscribersDeltaChart = new Chart(ctx2.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: filteredDates.slice(1),
+                        datasets: [
+                            {
+                                label: 'Прирост Telegram',
+                                data: tgDeltas,
+                                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                                borderColor: '#3b82f6',
+                                borderWidth: 1
+                            },
+                            {
+                                label: 'Прирост MAX',
+                                data: mxDeltas,
+                                backgroundColor: 'rgba(139, 92, 246, 0.7)',
+                                borderColor: '#8b5cf6',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { title: { display: true, text: 'Ежедневный прирост подписчиков' } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
+
+        function renderTopPostsChart() {
+            const tg = analyticsData.channels.telegram;
+            if (!tg) return;
             const tgPosts = tg.posts || [];
             const topPosts = tgPosts.sort((a, b) => b.views - a.views).slice(0, 12);
             if (topPosts.length) {
                 if (charts.postsChart) charts.postsChart.destroy();
-                const ctx3 = document.getElementById('posts-bar-chart').getContext('2d');
-                charts.postsChart = new Chart(ctx3, {
+                const ctx = document.getElementById('posts-bar-chart');
+                if (!ctx) return;
+                charts.postsChart = new Chart(ctx.getContext('2d'), {
                     type: 'horizontalBar',
                     data: {
                         labels: topPosts.map(p => p.text ? p.text.replace(/(.{30})..+/, "$1…") : 'ID ' + p.id),
