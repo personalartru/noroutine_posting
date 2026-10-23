@@ -714,7 +714,8 @@
             document.getElementById('analytics-stats').classList.add('hidden');
             document.getElementById('analytics-error').classList.add('hidden');
             try {
-                const res = await fetch(`https://raw.githubusercontent.com/${repo}/main/analytics.json`);
+                // Аналитика собирается в noroutine_growth и читается оттуда (публичный файл)
+                const res = await fetch(`https://raw.githubusercontent.com/personalartru/noroutine_growth/main/analytics.json?t=${Date.now()}`);
                 if (!res.ok) throw new Error('Аналитика не найдена');
                 analyticsData = await res.json();
                 document.getElementById('analytics-update').textContent = new Date(analyticsData.updated_at).toLocaleString('ru');
