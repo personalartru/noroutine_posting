@@ -75,7 +75,7 @@
                 <div id="stat-pending" class="text-2xl font-semibold mt-1 text-blue-600">0</div>
             </div>
             <div class="macos-card p-5 rounded-2xl">
-                <div class="text-gray-500 text-xs font-medium uppercase tracking-wider">Суммарно просмотров</div>
+                <div class="text-gray-500 text-xs font-medium uppercase tracking-wider">Суммарно просмотров (TG + MAX)</div>
                 <div id="stat-views" class="text-2xl font-semibold mt-1 text-purple-600">0</div>
             </div>
         </div>
@@ -417,12 +417,11 @@
             let total = topics.length;
             let published = topics.filter(t => t.status === 'published').length;
             let pending = total - published;
-            let totalViews = topics.reduce((acc, t) => acc + (parseInt(t.views) || 0), 0);
 
             document.getElementById('stat-total').innerText = total;
             document.getElementById('stat-published').innerText = published;
             document.getElementById('stat-pending').innerText = pending;
-            document.getElementById('stat-views').innerText = totalViews;
+            updateStatsWidget();
 
             if (filtered.length === 0) {
                 container.innerHTML = '<div class="p-8 text-center text-gray-400">Нет материалов, удовлетворяющих условиям фильтра</div>';
@@ -481,8 +480,6 @@
             } catch (err) {
                 console.warn('Не удалось загрузить max_channel_stats.json:', err);
             }
-            // После загрузки аналитики обновить сводную статистику
-            setTimeout(updateStatsWidget, 1000);
         }
 
         function updateStatsWidget() {
@@ -734,6 +731,7 @@
                 analyticsData = await res.json();
                 document.getElementById('analytics-update').textContent = new Date(analyticsData.updated_at).toLocaleString('ru');
                 renderAnalyticsWidgets();
+                updateStatsWidget();
                 document.getElementById('analytics-loading').classList.add('hidden');
                 document.getElementById('analytics-stats').classList.remove('hidden');
                 // Графики рендерим отдельно: ошибка одного не должна скрывать блок
