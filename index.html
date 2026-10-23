@@ -327,17 +327,25 @@
 
         async function loadTopics() {
             const { repo, token } = getSettings();
+            // Попробуем загрузить через raw (без токена)
+            try {
+                const rawRes = await fetch(`https://raw.githubusercontent.com/${repo}/main/topics.json`);
+                if (rawRes.ok) {
+                    topics = await rawRes.json();
+                    render();
+                    return;
+                }
+            } catch {} // ignore raw failure
+            // Если raw не сработал, попробуем через API с токеном (если он есть)
             if (!token) {
                 openSettingsModal();
                 return;
             }
-
             try {
                 const res = await fetch(`https://api.github.com/repos/${repo}/contents/topics.json`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (!res.ok) throw new Error('Не удалось загрузить topics.json. Проверьте токен.');
-                
                 const data = await res.json();
                 fileSha = data.sha;
                 const content = JSON.parse(decodeURIComponent(escape(atob(data.content))));
