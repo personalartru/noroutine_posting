@@ -1,0 +1,44 @@
+name: Fix MAX post links
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Внести правки (пусто = dry-run)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Сертификаты Минцифры
+        env:
+          REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+        run: |
+          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt -o /tmp/root.crt
+          curl -fsSL https://gu-st.ru/content/lending/russian_trusted_sub_ca_pem.crt -o /tmp/sub.crt
+          sudo cp /tmp/root.crt /usr/local/share/ca-certificates/russian_trusted_root_ca.crt
+          sudo cp /tmp/sub.crt /usr/local/share/ca-certificates/russian_trusted_sub_ca.crt
+          sudo update-ca-certificates
+      - name: Исправить ссылки в постах MAX
+        env:
+          MAX_BOT_TOKEN: ${{ secrets.MAX_BOT_TOKEN }}
+          MAX_CHANNEL_ID: ${{ secrets.MAX_CHANNEL_ID }}
+          MAX_BOT_USERNAME: ${{ secrets.MAX_BOT_USERNAME }}
+          REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+        run: |
+          if [ "${{ github.event.inputs.apply }}" = "true" ]; then
+            python fix_max_links.py --apply
+          else
+            python fix_max_links.py
+          fi

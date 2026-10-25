@@ -248,7 +248,8 @@ def main():
     s = generate(item["topic"], item.get("guidance", ""), item.get("linkText", ""), item.get("linkUrl", ""), item.get("date", ""))
     
     tags = item.get("tags") or s['tags']
-    full_text = f"<b>{s['title']}</b>\n\n{s['post']}{footer()}\n\n{tags}"
+    tg_text = f"<b>{s['title']}</b>\n\n{s['post']}{footer(platform='tg')}\n\n{tags}"
+    max_text = f"<b>{s['title']}</b>\n\n{s['post']}{footer(platform='max')}\n\n{tags}"
 
     try:
         # Если в админке указана своя картинка — берем её, иначе генерируем карточку
@@ -266,11 +267,11 @@ def main():
     except Exception as e:
         print(f"Предупреждение: ошибка отправки фото ({e}), шлем только текст.")
 
-    res = send_message(full_text)
+    res = send_message(tg_text)
 
     if res.get("ok"):
         try:
-            publish_to_max(full_text, image_source)
+            publish_to_max(max_text, image_source)
         except Exception as e:
             print("Предупреждение: не удалось опубликовать пост в MAX:", e)
 
