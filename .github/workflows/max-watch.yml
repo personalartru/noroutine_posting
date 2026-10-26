@@ -2,7 +2,7 @@ name: Watch MAX bot events
 
 on:
   schedule:
-    - cron: "*/4 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -53,6 +53,8 @@ jobs:
           else
             echo "Канал пока не найден — жду события bot_added"
           fi
+      - name: Подготовить файлы состояния
+        run: touch max_offset.txt max_events.log
       - name: Сохранить состояние
         uses: actions/cache/save@v4
         with:

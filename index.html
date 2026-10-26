@@ -188,10 +188,15 @@
         <div class="bg-white/70 backdrop-blur-xl rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
                 <h2 class="font-semibold text-gray-800">Очередь постов и расписание</h2>
-                <button onclick="loadTopics()" class="text-sm text-blue-600 hover:underline flex items-center space-x-1">
-                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-                    <span>Обновить</span>
-                </button>
+                <div class="flex items-center space-x-4">
+                    <button id="publish-now-btn" onclick="publishNow()" class="text-sm px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition shadow-sm">
+                        Опубликовать сейчас
+                    </button>
+                    <button onclick="loadTopics()" class="text-sm text-blue-600 hover:underline flex items-center space-x-1">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span>Обновить</span>
+                    </button>
+                </div>
             </div>
             <div id="topics-container" class="divide-y divide-gray-100">
                 <div class="p-8 text-center text-gray-400">Загрузка данных из GitHub...</div>
@@ -431,6 +436,12 @@
             filtered.forEach((topic) => {
                 const index = topics.indexOf(topic);
                 const isPublished = topic.status === 'published';
+                const legacyPublished = isPublished && !topic.tg_published_at && !topic.max_published_at;
+                const tgDone = legacyPublished || !!topic.tg_published_at;
+                const maxDone = legacyPublished || !!topic.max_published_at;
+                const platformBadges = (topic.tg_published_at || topic.max_published_at) ? `
+                                <span class="px-2 py-0.5 text-xs rounded-full font-medium ${tgDone ? 'bg-sky-100 text-sky-700' : 'bg-gray-100 text-gray-500'}">TG ${tgDone ? 'OK' : '—'}</span>
+                                <span class="px-2 py-0.5 text-xs rounded-full font-medium ${maxDone ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500'}">MAX ${maxDone ? 'OK' : '—'}</span>` : '';
                 const el = document.createElement('div');
                 el.className = 'px-6 py-4 flex items-center justify-between hover:bg-gray-50/60 transition';
                 el.innerHTML = `
@@ -444,6 +455,7 @@
                                 <span class="px-2 py-0.5 text-xs rounded-full font-medium ${isPublished ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}">
                                     ${isPublished ? 'Опубликовано' : 'Очередь'}
                                 </span>
+                                ${platformBadges}
                                 ${topic.imageUrl ? '<span class="text-xs text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full">🖼 Своя картинка</span>' : ''}
                             </div>
                             <h4 class="font-medium text-gray-900 mt-1">${topic.topic}</h4>
@@ -527,6 +539,41 @@
 
             const data = await res.json();
             fileSha = data.content.sha;
+        }
+
+        async function publishNow() {
+            const { repo, token } = getSettings();
+            if (!token) {
+                openSettingsModal();
+                return;
+            }
+            if (!confirm('Запустить публикацию следующей темы в Telegram и MAX?')) return;
+
+            const btn = document.getElementById('publish-now-btn');
+            const label = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = 'Запуск...';
+            try {
+                const res = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/vnd.github+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ event_type: 'publish' })
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.message || `HTTP ${res.status}`);
+                }
+                alert('Запущено. Пост появится в каналах через 1–2 минуты.');
+            } catch (err) {
+                alert('Не удалось запустить публикацию: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = label;
+            }
         }
 
         function handleImageSelect(event) {
@@ -680,7 +727,18 @@
                 if (index === '') {
                     topics.push(item);
                 } else {
-                    topics[index] = { ...topics[index], ...item };
+                    const prev = topics[index];
+                    const next = { ...prev, ...item };
+                    const contentChanged = prev.topic !== item.topic || prev.guidance !== item.guidance ||
+                        prev.linkUrl !== item.linkUrl || prev.linkText !== item.linkText || prev.imageUrl !== item.imageUrl;
+                    if (contentChanged) delete next.content;
+                    if (item.status === 'pending' && prev.status !== 'pending') {
+                        delete next.content;
+                        delete next.published_at;
+                        delete next.tg_published_at;
+                        delete next.max_published_at;
+                    }
+                    topics[index] = next;
                 }
 
                 submitBtn.innerText = 'Сохранение...';

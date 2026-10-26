@@ -61,18 +61,33 @@ def save_topics(topics):
         json.dump(topics, f, ensure_ascii=False, indent=2)
 
 
+def platform_published(item, platform):
+    if item.get(f"{platform}_published_at"):
+        return True
+    # Записи, опубликованные до разделения статусов, считаем доставленными везде.
+    return (item.get("status") == "published"
+            and not item.get("tg_published_at") and not item.get("max_published_at"))
+
+
+def fully_published(item):
+    return platform_published(item, "tg") and platform_published(item, "max")
+
+
 def pick_topic(topics):
     today = datetime.date.today().isoformat()
     for i, t in enumerate(topics):
-        if t.get("status") == "pending" and t.get("date", today) <= today:
+        if t.get("date", today) <= today and not fully_published(t):
             return i
     return None
 
 
 def already_published_today(topics):
-    today = datetime.datetime.utcnow().date().isoformat()
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     for t in topics:
-        if t.get("status") == "published" and str(t.get("published_at", ""))[:10] == today:
+        if not fully_published(t):
+            continue
+        stamps = (t.get("published_at"), t.get("tg_published_at"), t.get("max_published_at"))
+        if any(str(s)[:10] == today for s in stamps if s):
             return True
     return False
 
@@ -251,42 +266,61 @@ def main():
         print("Нет тем к публикации на сегодня."); return
 
     item = topics[idx]
-    s = generate(item["topic"], item.get("guidance", ""), item.get("linkText", ""), item.get("linkUrl", ""), item.get("date", ""))
-    
+    need_tg = not platform_published(item, "tg")
+    need_max = not platform_published(item, "max")
+
+    # Текст сохраняем в теме: при повторе после сбоя одной платформы
+    # не тратим OpenAI и не меняем уже опубликованный вариант.
+    s = item.get("content")
+    if not s:
+        s = generate(item["topic"], item.get("guidance", ""), item.get("linkText", ""), item.get("linkUrl", ""), item.get("date", ""))
+        item["content"] = s
+        save_topics(topics)
+
     tags = item.get("tags") or s['tags']
     tg_text = f"<b>{s['title']}</b>\n\n{s['post']}{footer(platform='tg')}\n\n{tags}"
     max_text = f"<b>{s['title']}</b>\n\n{s['post']}{footer(platform='max')}\n\n{tags}"
 
-    try:
-        # Если в админке указана своя картинка — берем её, иначе генерируем карточку
-        custom_image = item.get("imageUrl")
-        image_source = custom_image
-        if custom_image:
-            res_photo = send_photo(custom_image)
-        else:
-            card_path = create_branded_card(s['title'])
-            image_source = card_path
-            res_photo = send_photo(card_path)
+    # Если в админке указана своя картинка — берем её, иначе генерируем карточку
+    image_source = item.get("imageUrl") or create_branded_card(s['title'])
 
-        if not res_photo.get("ok"):
-            print("Предупреждение: не удалось отправить фото, шлем только текст:", res_photo)
-    except Exception as e:
-        print(f"Предупреждение: ошибка отправки фото ({e}), шлем только текст.")
+    errors = []
 
-    res = send_message(tg_text)
-
-    if res.get("ok"):
+    if need_tg:
         try:
-            publish_to_max(max_text, image_source)
+            res_photo = send_photo(image_source)
+            if not res_photo.get("ok"):
+                print("Предупреждение: не удалось отправить фото, шлем только текст:", res_photo)
         except Exception as e:
-            print("Предупреждение: не удалось опубликовать пост в MAX:", e)
+            print(f"Предупреждение: ошибка отправки фото ({e}), шлем только текст.")
 
+        res = send_message(tg_text)
+        if res.get("ok"):
+            item["tg_published_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            print("Опубликовано в Telegram:", s["title"])
+        else:
+            errors.append(f"Telegram: {res}")
+            print("Ошибка публикации в Telegram:", res)
+
+    if need_max:
+        try:
+            res_max = publish_to_max(max_text, image_source)
+            if res_max is None:
+                errors.append("MAX: нет MAX_BOT_TOKEN/MAX_CHANNEL_ID")
+            else:
+                item["max_published_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        except Exception as e:
+            errors.append(f"MAX: {e}")
+            print("Ошибка публикации в MAX:", e)
+
+    if fully_published(item):
         item["status"] = "published"
-        item["published_at"] = datetime.datetime.utcnow().isoformat()
-        save_topics(topics)
-        print("Опубликовано:", s["title"])
-    else:
-        print("Ошибка публикации текста:", res)
+        item["published_at"] = item.get("tg_published_at") or item.get("max_published_at")
+
+    save_topics(topics)
+
+    if errors:
+        print("Не доставлено:", "; ".join(errors))
         sys.exit(1)
 
 
