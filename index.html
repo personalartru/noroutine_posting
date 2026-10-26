@@ -547,6 +547,11 @@
                 openSettingsModal();
                 return;
             }
+            const today = new Date().toISOString().slice(0, 10);
+            if (!topics.some(t => (t.date || '') <= today && t.status !== 'published')) {
+                alert('Нет тем к публикации на сегодня.');
+                return;
+            }
             if (!confirm('Запустить публикацию следующей темы в Telegram и MAX?')) return;
 
             const btn = document.getElementById('publish-now-btn');
